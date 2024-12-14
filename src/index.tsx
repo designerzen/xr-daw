@@ -6,7 +6,7 @@
  */
 
 import { Canvas, useFrame } from "@react-three/fiber"
-import { Environment, Gltf, PerspectiveCamera } from "@react-three/drei"
+import { Environment, PerspectiveCamera } from "@react-three/drei"
 import { XR, createXRStore } from "@react-three/xr"
 
 import ReactDOM from "react-dom/client"
@@ -15,15 +15,15 @@ import { Bullets } from "./bullets"
 import { Gun } from "./gun"
 import { Score } from "./score"
 import { Target } from "./targets"
-import gsap from "gsap"
 
 import AudioTimer from "./timing/timer.audio"
 import { loadMIDIFile, loadMIDIFileThroughClient } from "./audio/midi/midi-file"
 
-
+import { Group } from "three"
+import gsap from "gsap"
 
 // -----------------------------------------------------------------------------
-
+// Requires a user action so useEffect cannot be used here
 const createBackend = async () => {
 
   // Create our audio pipelines
@@ -44,6 +44,7 @@ const createBackend = async () => {
     // and ignore the other 23 events 
     console.info("tick @"+tempo+" BPM", values)
   })
+  // clock.startTimer()
 
 
   // -----------------------------------------------------------------------------
@@ -62,9 +63,7 @@ const createBackend = async () => {
   console.info("Midi file loaded", midiFile)
 
   return { audioContext, clock, midiFile }
-
 }
-
 
 
 // -----------------------------------------------------------------------------
@@ -100,6 +99,18 @@ const GsapTicker = () => {
   return null
 }
 
+// Create the front and backends
+const createClient = () => {
+  createBackend()
+  xrStore.enterVR()
+}
+
+const uploadMIDIFile = async (file) => {
+  const midiFile = await loadMIDIFileThroughClient( file, {}, (output)=>{
+    console.info("midi file loaded", file, " BPM", output)
+  } )
+}
+
 const App = () => {
   return (
     <>
@@ -114,13 +125,19 @@ const App = () => {
         <PerspectiveCamera makeDefault position={[0, 1.6, 2]} fov={75} />
         <Environment preset="warehouse" />
         <Bullets />
-        <Gltf src="assets/actors/spacestation.glb" />
-        <Target targetIdx={0} />
-        <Target targetIdx={1} />
-        <Target targetIdx={2} />
+        {/* <Gltf src="assets/actors/spacestation.glb" /> */}
+
+        <Group rotation-x={-Math.PI / 8}>
+          <Target targetIdx={0} />
+          <Target targetIdx={1} />
+          <Target targetIdx={2} />
+        </Group>
+        
         <Score />
         <GsapTicker />
+
         <XR store={xrStore}></XR>
+
       </Canvas>
 
       <div
@@ -162,7 +179,7 @@ const App = () => {
 
 
         <button
-          onClick={() => xrStore.enterVR()}
+          onClick={() => uploadMIDIFile()}
           style={{
             position: "fixed",
             bottom: "0",
@@ -180,6 +197,4 @@ const App = () => {
   )
 }
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <App />
-)
+ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(<App />)
