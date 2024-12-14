@@ -19,9 +19,9 @@ import {
 } from './timing.events.js'
 
 // Parcel style
-import ROLLING_WORKER_URI from 'url:./timing.rolling.worker.js'
-import SETINERVAL_WORKER_URI from 'url:./timing.setinterval.worker.js'
-import SETTIMEOUT_WORKER_URI from 'url:./timing.settimeout.worker.js'
+import ROLLING_WORKER_URI from './timing.rolling.worker.js?url'
+import SETINERVAL_WORKER_URI from './timing.setinterval.worker.js?url'
+import SETTIMEOUT_WORKER_URI from './timing.settimeout.worker.js?url'
 
 // Vite style
 // import ROLLING_WORKER_URI from './timing.rolling.worker.js?worker'

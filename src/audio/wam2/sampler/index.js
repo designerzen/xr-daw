@@ -2,7 +2,7 @@ import { WebAudioModule } from '@webaudiomodules/sdk'
 import { ParamMgrFactory } from '@webaudiomodules/sdk-parammgr'
 import Sampler from './sampler.wam.js'
 
-import descriptorJSONURL from 'url:./descriptor.json'
+import descriptorJSONURL from './descriptor.json?url'
 import descriptorJSON from './descriptor.json'
 // import templateURL from 'url:./template.html'
 

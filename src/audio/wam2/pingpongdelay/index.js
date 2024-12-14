@@ -8,7 +8,7 @@ import { ParamMgrFactory } from '@webaudiomodules/sdk-parammgr'
 import PingPongDelayNode from './pingpongdelay.wam.js'
 // import { createElement } from './Gui/index.js';
 
-import descriptorJSONURL from 'url:./descriptor.json'
+import descriptorJSONURL from './descriptor.json?url'
 import descriptorJSON from './descriptor.json'
 
 const NAME = "pingpongdelay"
