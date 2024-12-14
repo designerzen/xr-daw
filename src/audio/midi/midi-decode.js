@@ -154,8 +154,15 @@ const decodeTracks = ( track, stream ) =>
 
 		// Now re-loop through all events and all 
 
-		console.info("MIDI File loaded with duration", track.duration )
-		track.commands.forEach( command => console.info("MIDI Command", command ) )
+		if (track.duration > 0 )
+		{
+			console.info("MIDI File loaded with duration", track.duration )
+			track.commands.forEach( command => {
+				console.info("MIDI Command", command ) 
+				command.percentStart = command.time ? command.time / track.duration : -1
+				command.percentDuration = command.velocity ? command.velocity / track.duration : -1
+			})
+		}
 
 	}
 	return track

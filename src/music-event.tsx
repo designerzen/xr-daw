@@ -16,10 +16,9 @@
 
 import { useFrame } from '@react-three/fiber'
 import { useRef, forwardRef } from 'react'
-import { Mesh } from 'three'
 
 type TargetProps = {
-    musicEventIndex: number,
+    index: number,
     pitch:number,
     velocity:number,
     startTime:number,
@@ -28,23 +27,21 @@ type TargetProps = {
 }
 
 export const MusicEventProxy = ({ 
-    musicEventIndex, 
+    index, 
     pitch,
     velocity,
     startTime,
     duration,
     color ="orange" 
-}: TargetProps) => {
-
-    const musicEventRef = useRef<Mesh>(null)
+}: TargetProps, ref : React.Ref<any>) => {
 
     const height = 1
-    const width = 1
-    const depth = 1
+    const width = 1 * velocity
+    const depth = 1 * duration
 
     // TODO : Create this colour as a function of the pitch!
     return (
-        <mesh ref={musicEventRef}>
+        <mesh ref={ref}>
             {/* TODO: Bind the args to the geometry */}
             <boxGeometry args={[width, height, depth]} />
             <meshStandardMaterial color={color} />

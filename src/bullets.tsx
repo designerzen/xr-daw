@@ -67,7 +67,7 @@ type BulletProps = {
   bulletData: BulletData;
 };
 const Bullet = ({ bulletData }: BulletProps) => {
-  const { scene } = useGLTF("assets/blaster.glb");
+  const { scene } = useGLTF("assets/actors/blaster.glb");
   const bulletPrototype = scene.getObjectByName("bullet")! as Mesh;
   const ref = useRef<Mesh>(null);
   useFrame(() => {

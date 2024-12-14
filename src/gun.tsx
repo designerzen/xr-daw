@@ -18,7 +18,7 @@ import { useRef } from "react";
 export const Gun = () => {
   const state = useXRInputSourceStateContext("controller");
   const gamepad = state.inputSource.gamepad;
-  const { scene } = useGLTF("assets/blaster.glb");
+  const { scene } = useGLTF("assets/actors/blaster.glb");
   const bulletPrototype = scene.getObjectByName("bullet")!;
   const soundRef = useRef<PAudio>(null);
   useXRControllerButtonEvent(state, "xr-standard-trigger", (state) => {
@@ -44,4 +44,4 @@ export const Gun = () => {
   );
 };
 
-useGLTF.preload("assets/blaster.glb");
+useGLTF.preload("assets/actors/blaster.glb");

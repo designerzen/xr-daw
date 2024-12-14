@@ -314,7 +314,7 @@ export default class Timer {
 				this.unsetTimingWorker()
 			}
 
-			const url = new URL("./timing.settimeout.worker.js", import.meta.url)
+			const url = new URL("./timing.settimeout.worker.js?worker", import.meta.url)
 		
 			this.timingWorker = new Worker(
 				url,

@@ -30,6 +30,9 @@ export default class MIDICommand extends AudioCommand
 	// useful for time-stretching the MIDI track to our own 
 	// rate 
 	percent
+	// added by zen
+	percentStart
+	percentDuration
 
 	key
 	scale

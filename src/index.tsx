@@ -20,7 +20,10 @@ import AudioTimer from "./timing/timer.audio"
 import { loadMIDIFile, loadMIDIFileThroughClient } from "./audio/midi/midi-file"
 
 import gsap from "gsap"
+import { MusicEvents } from "./music-events"
 
+
+let timer, midiData, context
 // -----------------------------------------------------------------------------
 // Requires a user action so useEffect cannot be used here
 const createBackend = async () => {
@@ -45,7 +48,6 @@ const createBackend = async () => {
   })
 
   // clock.startTimer()
-
 
   // -----------------------------------------------------------------------------
   // MIDI File options
@@ -90,6 +92,9 @@ const xrStore = createXRStore({
   controller: {
     right: Gun,
   },
+//  timer:{}, 
+//  midiData:{}, 
+//  context:{}
 })
 
 const GsapTicker = () => {
@@ -100,9 +105,15 @@ const GsapTicker = () => {
 }
 
 // Create the front and backends
-const createClient = () => {
-  createBackend()
+const createClient = async() => {
+  const results = await createBackend()
+  timer = results.clock
+  midiData = results.midiFile
+  context = results.audioContext
   xrStore.enterVR()
+
+  // FIXME: 
+  timer.startTimer()
 }
 
 const uploadMIDIFile = async (file) => {
@@ -124,16 +135,23 @@ const App = () => {
         <color args={[0x808080]} attach={"background"}></color>
         <PerspectiveCamera makeDefault position={[0, 1.6, 2]} fov={75} />
         <Environment preset="warehouse" />
-        <Bullets />
+       
+        { 
+          ( midiData !== undefined ) ?? <MusicEvents 
+            track={midiData} 
+            key={midiData.duration} />
+        }
+
+        {/* <Bullets /> */}
         {/* <Gltf src="assets/actors/spacestation.glb" /> */}
 
-        <group rotation-x={-Math.PI / 8}>
+        {/* <group rotation-x={-Math.PI / 8}>
           <Target targetIdx={0} />
           <Target targetIdx={1} />
           <Target targetIdx={2} />
-        </group>
+        </group> */}
         
-        <Score />
+        {/* <Score /> */}
         <GsapTicker />
 
         <XR store={xrStore}></XR>
@@ -156,8 +174,8 @@ const App = () => {
           onClick={() => createBackend()}
           style={{
             position: "fixed",
-            bottom: "80px",
-            left: "50%",
+            bottom: "20px",
+            left: "10%",
             fontSize: "20px",
           }}
         >
@@ -165,7 +183,7 @@ const App = () => {
         </button>
 
         <button
-          onClick={() => xrStore.enterVR()}
+          onClick={() => createClient()}
           style={{
             position: "fixed",
             bottom: "20px",
@@ -174,7 +192,7 @@ const App = () => {
             fontSize: "20px",
           }}
         >
-          Enter VR
+          Begin VR
         </button>
 
 
@@ -182,10 +200,9 @@ const App = () => {
           onClick={() => uploadMIDIFile()}
           style={{
             position: "fixed",
-            bottom: "0",
-            left: "0",
+            bottom: "20px",
+            left: "66%",
             top: "0",
-            bottom: "0",
             fontSize: "20px",
           }}
         >
