@@ -9,18 +9,6 @@ import {
 	EVENT_READY, EVENT_STARTING, EVENT_STOPPING, EVENT_TICK
 } from './timing.events.js'
 
-import { convertBPMToPeriod  } from "./timing"
-
-// Parcel style
-import ROLLING_WORKER_URI from './timing.rolling.worker.js?url'
-import SETINERVAL_WORKER_URI from './timing.setinterval.worker.js?url'
-import SETTIMEOUT_WORKER_URI from './timing.settimeout.worker.js?url'
-
-// Vite style
-// import ROLLING_WORKER_URI from './timing.rolling.worker.js?worker'
-// import SETINERVAL_WORKER_URI from './timing.setinterval.worker.js?worker'
-// import SETTIMEOUT_WORKER_URI from './timing.settimeout.worker.js?worker'
-
 export const MAX_BARS_ALLOWED = 32
 
 // keep this at 24 to match MIDI1.0 spec
@@ -249,9 +237,9 @@ export default class Timer {
 
 	constructor(divisions=DIVISIONS){
 		this.divisions = divisions
+		
 		// We need to find a way to load this dynamically
-		this.setTimingWorker(SETTIMEOUT_WORKER_URI)
-		// this.setTimingWorker('./timing.rolling.worker.js')
+		this.setTimingWorker()
 	}
 
 	/**
@@ -315,7 +303,7 @@ export default class Timer {
 	// in the future, we may be able to pass offlineAudioContext to a worker
 	// and at that point, we can finally tie in the actual timing by using the 
 	// context as the global clock!
-	setTimingWorker(type){
+	setTimingWorker(){
 		try{
 
 			let wasRunning = this.isRunning
@@ -326,8 +314,12 @@ export default class Timer {
 				this.unsetTimingWorker()
 			}
 
-			const url = new URL( type )
-			this.timingWorker = new Worker( url, {type: 'module'} )
+			const url = new URL("./timing.settimeout.worker.js", import.meta.url)
+		
+			this.timingWorker = new Worker(
+				url,
+				{type: 'module'}
+			)
 
 			if (!this.timingWorker)
 			{
