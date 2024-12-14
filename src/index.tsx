@@ -47,7 +47,7 @@ const createBackend = async () => {
     console.info("tick @"+tempo+" BPM", values)
   })
 
-  // clock.startTimer()
+  clock.startTimer()
 
   // -----------------------------------------------------------------------------
   // MIDI File options

@@ -314,10 +314,10 @@ export default class Timer {
 				this.unsetTimingWorker()
 			}
 
-			const url = new URL("./timing.settimeout.worker.js?worker", import.meta.url)
-		
+			// https://vite.dev/guide/features.html#web-workers
+			// URL MUST be inside the call
 			this.timingWorker = new Worker(
-				url,
+				new URL("./timing.settimeout.worker.js", import.meta.url),
 				{type: 'module'}
 			)
 
