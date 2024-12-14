@@ -5,6 +5,7 @@ export const MIDI_DIVISIONS = 24
 export default class AudioTimer extends Timer {
 	
 	audioContext = null
+	
 	/**
 	 * Accurate time in milliseconds
 	 * @returns {Number} The current time as of now

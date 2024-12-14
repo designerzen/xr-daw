@@ -12,7 +12,6 @@
 
 import { useRef } from "react"
 import MidiTrack from "./audio/midi/midi-track"
-import { Group } from "three"
 
 type TargetProps = {
     track:MidiTrack
@@ -23,7 +22,7 @@ export const MusicEvent = ({ track }: TargetProps) => {
     return (
         <group ref={musicEventRef}>
             {
-                track.commands.map((command, index) => {
+                track.noteOnCommands.map((command, index) => {
                     return <MusicEvent 
                                 key={index} 
                                 pitch={command.noteNumber} 

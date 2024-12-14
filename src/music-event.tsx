@@ -14,7 +14,9 @@
  * 
  */
 
-import { useRef } from "react"
+import { useFrame } from '@react-three/fiber'
+import { useRef, forwardRef } from 'react'
+import { Mesh } from 'three'
 
 type TargetProps = {
     musicEventIndex: number,
@@ -25,7 +27,7 @@ type TargetProps = {
     color:number|string
 }
 
-export const MusicEvent = ({ 
+export const MusicEventProxy = ({ 
     musicEventIndex, 
     pitch,
     velocity,
@@ -48,3 +50,5 @@ export const MusicEvent = ({
             <meshStandardMaterial color={color} />
         </mesh>)
 }
+
+export const MusicEvent = forwardRef(MusicEventProxy)

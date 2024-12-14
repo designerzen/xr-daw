@@ -19,7 +19,6 @@ import { Target } from "./targets"
 import AudioTimer from "./timing/timer.audio"
 import { loadMIDIFile, loadMIDIFileThroughClient } from "./audio/midi/midi-file"
 
-import { Group } from "three"
 import gsap from "gsap"
 
 // -----------------------------------------------------------------------------
@@ -44,7 +43,8 @@ const createBackend = async () => {
     // and ignore the other 23 events 
     console.info("tick @"+tempo+" BPM", values)
   })
-  // clock.startTimer()
+
+  clock.startTimer()
 
 
   // -----------------------------------------------------------------------------
@@ -127,11 +127,11 @@ const App = () => {
         <Bullets />
         {/* <Gltf src="assets/actors/spacestation.glb" /> */}
 
-        <Group rotation-x={-Math.PI / 8}>
+        <group rotation-x={-Math.PI / 8}>
           <Target targetIdx={0} />
           <Target targetIdx={1} />
           <Target targetIdx={2} />
-        </Group>
+        </group>
         
         <Score />
         <GsapTicker />
