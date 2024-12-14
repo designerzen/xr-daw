@@ -154,7 +154,9 @@ const decodeTracks = ( track, stream ) =>
 
 		// Now re-loop through all events and all 
 
-		console.error("YO!", track )
+		console.info("MIDI File loaded with duration", track.duration )
+		track.commands.forEach( command => console.info("MIDI Command", command ) )
+
 	}
 	return track
 }
