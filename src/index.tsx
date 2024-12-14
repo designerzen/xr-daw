@@ -20,6 +20,10 @@ import gsap from "gsap"
 import AudioTimer from "./timing/timer.audio"
 import { loadMIDIFile, loadMIDIFileThroughClient } from "./audio/midi/midi-file"
 
+
+
+// -----------------------------------------------------------------------------
+// Timing options
 let tempo = 90
 
 // Create timing loop
@@ -27,17 +31,30 @@ const audioContext = new AudioContext()
 const clock = new AudioTimer( audioContext )
 clock.BPM = tempo
 clock.setCallback( ( values )=>{
+  // This happens 24 times per quarter note
+  // so you can set the progress of the timeline with it 
+  // and ignore the other 23 events 
   console.info("tick @"+tempo+" BPM", values)
 })
 
+
+// -----------------------------------------------------------------------------
+// MIDI File options
+const options = {}
 // Load in the MIDI file from the file requester (or embed the file as base 64)
 // const midiFile = await loadMIDIFileThroughClient( file, {}, (output)=>{
 //   console.info("midi file loaded", file, " BPM", output)
 // } )
 
 // Load in a local MIDI file from a relative URI
-const midiFile = midiPerformance = await loadMIDIFile( "./assets/midi/midi_nyan-cat.mid" )
+const midiFile = await loadMIDIFile( "./assets/midi/midi_nyan-cat.mid", options, (values)=>{
+  console.info("midi file loaded", options, {values} )
+} )
 
+
+
+// -----------------------------------------------------------------------------
+// Shared data store
 const xrStore = createXRStore({
   emulate: {
     controller: {
