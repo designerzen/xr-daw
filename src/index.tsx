@@ -95,6 +95,22 @@ const App = () => {
         >
           Enter VR
         </button>
+
+
+        <button
+          onClick={() => xrStore.enterVR()}
+          style={{
+            position: "fixed",
+            bottom: "0",
+            left: "0",
+            top: "0",
+            bottom: "0",
+            fontSize: "20px",
+          }}
+        >
+          Upload MIDI File
+        </button>
+
       </div>
     </>
   )
