@@ -23,33 +23,47 @@ import { loadMIDIFile, loadMIDIFileThroughClient } from "./audio/midi/midi-file"
 
 
 // -----------------------------------------------------------------------------
-// Timing options
-let tempo = 90
 
-// Create timing loop
-const audioContext = new AudioContext()
-const clock = new AudioTimer( audioContext )
-clock.BPM = tempo
-clock.setCallback( ( values )=>{
-  // This happens 24 times per quarter note
-  // so you can set the progress of the timeline with it 
-  // and ignore the other 23 events 
-  console.info("tick @"+tempo+" BPM", values)
-})
+const createBackend = async () => {
+
+  // Create our audio pipelines
+  const audioContext = new AudioContext()
+  if (audioContext.state === 'suspended') {
+    audioContext.resume()
+  }
+
+  // Timing options
+  let tempo = 90
+
+  // Create timing loop
+  const clock = new AudioTimer( audioContext )
+  clock.BPM = tempo
+  clock.setCallback( ( values )=>{
+    // This happens 24 times per quarter note
+    // so you can set the progress of the timeline with it 
+    // and ignore the other 23 events 
+    console.info("tick @"+tempo+" BPM", values)
+  })
 
 
-// -----------------------------------------------------------------------------
-// MIDI File options
-const options = {}
-// Load in the MIDI file from the file requester (or embed the file as base 64)
-// const midiFile = await loadMIDIFileThroughClient( file, {}, (output)=>{
-//   console.info("midi file loaded", file, " BPM", output)
-// } )
+  // -----------------------------------------------------------------------------
+  // MIDI File options
+  const options = {}
+  // Load in the MIDI file from the file requester (or embed the file as base 64)
+  // const midiFile = await loadMIDIFileThroughClient( file, {}, (output)=>{
+  //   console.info("midi file loaded", file, " BPM", output)
+  // } )
 
-// Load in a local MIDI file from a relative URI
-const midiFile = await loadMIDIFile( "./assets/midi/midi_nyan-cat.mid", options, (values)=>{
-  console.info("midi file loaded", options, {values} )
-} )
+  // Load in a local MIDI file from a relative URI
+  const midiFile = await loadMIDIFile( "./assets/midi/midi_nyan-cat.mid", options, (values)=>{
+    console.info("midi file loaded", options, {values} )
+  } )
+
+  console.info("Midi file loaded", midiFile)
+
+  return { audioContext, clock, midiFile }
+
+}
 
 
 
@@ -100,7 +114,7 @@ const App = () => {
         <PerspectiveCamera makeDefault position={[0, 1.6, 2]} fov={75} />
         <Environment preset="warehouse" />
         <Bullets />
-        <Gltf src="assets/spacestation.glb" />
+        <Gltf src="assets/actors/spacestation.glb" />
         <Target targetIdx={0} />
         <Target targetIdx={1} />
         <Target targetIdx={2} />
@@ -121,6 +135,18 @@ const App = () => {
           color: "white",
         }}
       >
+        <button
+          onClick={() => createBackend()}
+          style={{
+            position: "fixed",
+            bottom: "80px",
+            left: "50%",
+            fontSize: "20px",
+          }}
+        >
+          Create Backend
+        </button>
+
         <button
           onClick={() => xrStore.enterVR()}
           style={{
