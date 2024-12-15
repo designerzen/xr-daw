@@ -31,6 +31,7 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
     {
         return (<></>)
     }
+    
     const musicEventRef = useRef<Group>(null)
     const camera = useThree(state => state.camera)
     

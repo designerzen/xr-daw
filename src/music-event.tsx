@@ -14,6 +14,7 @@
  * 
  */
 import { useRef, forwardRef } from 'react'
+import { Vector3 } from 'three'
 
 type TargetProps = {
     index: number,
@@ -35,15 +36,13 @@ export const MusicEventProxy = ({
     const scaleFactor = 0.2
     const randomNumber = Math.random() * 360
     const width = scaleFactor * (duration ?? 1)
-    const height = scaleFactor * (velocity ?? 1)
+    const height = 3 * scaleFactor * (velocity ?? 1)
     const depth = scaleFactor 
 
-    // const position = [ pitch, velocity, startTime]
-    const position = [ 
-        startTime * scaleFactor + index, 
-        velocity * scaleFactor, 
-        duration * scaleFactor
-    ]
+    const position = new Vector3( startTime * scaleFactor + index, 
+        velocity * scaleFactor * 1, 
+        duration * scaleFactor * 1)
+
     // const color = `hsl(${randomNumber}, +  100%, 50%)`
     const color = `hsl(${(pitch * 6)%360}, 100%, 50%)`
 
@@ -52,7 +51,13 @@ export const MusicEventProxy = ({
                   
     // TODO : Create this colour as a function of the pitch!
     return (
-        <mesh ref={ref} position={position} >
+        <mesh 
+            ref={ref} 
+            position={[ 
+                startTime * scaleFactor + index, 
+                velocity * scaleFactor * 10, 
+                duration * scaleFactor * 5
+            ]} >
             <boxGeometry args={[width, height, depth]} />
             <meshStandardMaterial color={color} />
         </mesh>)
