@@ -101,7 +101,7 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
                      return <MusicEvent
                                 index={index}
                                 key={command.id} 
-                                patch={command.programNumber}
+                                programNumber={command.programNumber}
                                 pitch={command.noteNumber} 
                                 velocity={command.velocity}  
                                 startTime={command.percentStart} 
