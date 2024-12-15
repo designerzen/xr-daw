@@ -31,7 +31,7 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
     {
         return (<></>)
     }
-    
+
     const musicEventRef = useRef<Group>(null)
     const camera = useThree(state => state.camera)
     
@@ -44,11 +44,11 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
         //   return [ old[0], old[1]+0.5, old[2] ] 
         // })
 
-        camera.position.y += 5
+        // camera.position.y += 5
 
-        position[1] += 1
+        // position[1] += 1
 
-        console.info("tick @"+tempo+" camera", camera.position.y, {data, camera}) 
+        // console.info("tick @"+tempo+" camera", camera.position.y, {data, camera}) 
     }, tempo )
 
     // const [progress, setProgress] = useState(0)
