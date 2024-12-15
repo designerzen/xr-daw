@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import AudioTimer from "../timing/timer.audio"
 
 export default function useTimer( audioContext, tempo = 90 ) {
    
     const [timer, setTimer] = useState(null)
-    const [beat, setBeat] = useState(null)
+    // const [beat, setBeat] = useState(0)
+    const beat = useMemo( () => ({}), []) // Create a memoized object to store keyboard state
+
 
     let clock
 
@@ -19,7 +21,7 @@ export default function useTimer( audioContext, tempo = 90 ) {
             // This happens 24 times per quarter note
             // so you can set the progress of the timeline with it 
             // and ignore the other 23 events 
-            // setBeat(values)
+            // setBeat(values.bar)
             console.info("tick @"+tempo+" BPM", values)
           })
           
