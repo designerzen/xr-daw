@@ -78,8 +78,8 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
             {
                 track.noteOnCommands.map((command, index) => {
                      return <MusicEvent
-                                key={index} 
                                 index={index}
+                                key={command.id} 
                                 pitch={command.noteNumber} 
                                 velocity={command.velocity} 
                                 startTime={command.startTime} 
