@@ -25,15 +25,6 @@ export default class MIDICommand extends AudioCommand
 	subframe
 	microsecondsPerBeat
 
-	// UNOFFICAl: added by our midi decoder
-	// this is a ratio of this position / track-duration
-	// useful for time-stretching the MIDI track to our own 
-	// rate 
-	percent
-	// added by zen
-	percentStart
-	percentDuration
-
 	key
 	scale
 	numerator
@@ -43,12 +34,26 @@ export default class MIDICommand extends AudioCommand
 
 	amount
 
-	// UNOFFICAl: not an official MIDI spec but we use it in our app
-	noteName
-
 	controllerType
 	programNumber
 	sequenceNumber
+
+
+	// UNOFFICAl: not an official MIDI spec but we use it in our app
+	noteName
+
+	// UNOFFICAl: not an official MIDI spec but we use it in our app
+	duration
+
+	// UNOFFICAl: added by our midi decoder
+	// this is a ratio of this position / track-duration
+	// useful for time-stretching the MIDI track to our own 
+	// rate 
+	percent
+	// added by zen
+	percentStart
+	percentDuration
+
 
 	constructor(){
 		super()

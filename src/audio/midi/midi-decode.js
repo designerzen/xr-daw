@@ -151,19 +151,40 @@ const decodeTracks = ( track, stream ) =>
 			//tracks[i].push(event);
 			track.addEvent(i,event)
 		}
+	}
 
-		// Now re-loop through all events and all 
+	// Now re-loop through all events and all use noteOffs to determine the duration of each note on...
+	if (track.duration > 0 )
+	{
+		const activemusicalEvents = new Map()
+		track.commands.forEach( command => {
 
-		if (track.duration > 0 )
-		{
-			console.info("MIDI File loaded with duration", track.duration )
-			track.commands.forEach( command => {
-				console.info("MIDI Command", command ) 
-				command.percentStart = command.time ? command.time / track.duration : -1
-				command.percentDuration = command.velocity ? command.velocity / track.duration : -1
-			})
-		}
+			switch(command.subtype)
+			{
+				case "noteOn":
+					activemusicalEvents.set(command.noteNumber, command)
+					
+					break
 
+				case "noteOff":
+					// we need to set the previus event 
+					const note = activemusicalEvents.get(command.noteNumber)
+					if (note)
+					{
+						// note off time - note on time
+						note.duration = command.time - note.time
+						command.percentDuration = note.duration / track.duration
+						activemusicalEvents.delete(command.noteNumber)
+					}
+					break
+			}
+
+			console.info("MIDI Command", {command, activemusicalEvents} ) 
+			command.percentStart = command.time ? command.time / track.duration : -1
+			
+		})
+
+		console.info("MIDI File loaded with duration", track.duration, {activemusicalEvents} )
 	}
 	return track
 }
