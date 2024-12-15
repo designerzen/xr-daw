@@ -21,20 +21,16 @@ import useTimer from "./hooks/useTimer"
 
 type TargetProps = {
     track:MidiTrack,
-    audioContext:AudioContext,
+    clock:AudioTimer,
     position:number[]
 }
 
-export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetProps) => {
+export const MusicEvents = ({ track, clock, position=[0,0,0] }: TargetProps) => {
     
     const musicEventRef = useRef<Group>(null)
     // const [progress, setProgress] = useState(0)
 
-    if (!audioContext){
-        return <></>
-    }
-
-    const {beat, timer} = useTimer( audioContext, 90 )
+    // const {beat, timer} = useTimer( audioContext, ()=>{}, 90 )
 
     // clock.setCallback( values =>{
     //     // This happens 24 times per quarter note
@@ -69,7 +65,7 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
     // TOCK
     useFrame(() => {
         const now = performance.now()
-        console.log(now, "RENDER loop MusicEvents MIDI File", {track}, beat )
+        // console.log(now, "RENDER loop MusicEvents MIDI File", {track} )
     })
 
     // MIDI Track has populated

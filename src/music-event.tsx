@@ -33,15 +33,18 @@ export const MusicEventProxy = ({
 }: TargetProps, ref : React.Ref<any>) => {
 
     {/* TODO: Bind the args to the geometry */}
-    // const randomNumber = Math.random() * 360
-    const width = 1
-    const  height = 1 * (velocity ?? 1)
-    const depth = 1 * (duration ?? 1)
+    const randomNumber = Math.random() * 360
+    const width = 1 * (duration ?? 1)
+    const height = 1 * (velocity ?? 1)
+    const depth = 1 
+
     // const position = [ pitch, velocity, startTime]
     const position = [ startTime, velocity, duration]
-    const color = `hsl(${pitch * 2}, 100%, 50%)`
+    const color = `hsl(${randomNumber}, 100%, 50%)`
+    // const color = `hsl(${pitch * 2}, 100%, 50%)`
 
-    console.info(index, "MusicEvent", pitch, {width, height, depth, color, pitch, velocity, startTime, duration, position} ) 
+    console.info(index, "MusicEvent", position, [width, height, depth] , color ) 
+    // console.info(index, "MusicEvent", pitch, {width, height, depth, color, pitch, velocity, startTime, duration, position} ) 
                   
     // TODO : Create this colour as a function of the pitch!
     return (

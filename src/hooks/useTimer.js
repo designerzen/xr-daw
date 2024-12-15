@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import AudioTimer from "../timing/timer.audio"
 
-export default function useTimer( audioContext, tempo = 90 ) {
+export default function useTimer( audioContext, callback, tempo = 90 ) {
    
     const [timer, setTimer] = useState(null)
     // const [beat, setBeat] = useState(0)
@@ -25,7 +25,7 @@ export default function useTimer( audioContext, tempo = 90 ) {
             beat.barsElapsed = values.barsElapsed
             beat.divisionsElapsed = values.divisionsElapsed
             beat.timePassed = values.timePassed
-            console.info("tick @"+tempo+" BPM", {values, beat})
+            callback(values)
           })
           
           clock.startTimer()
@@ -38,7 +38,7 @@ export default function useTimer( audioContext, tempo = 90 ) {
           }
 
         }else{
-          // console.error("Audio Context not available for Timer yet")
+          //console.error("Audio Context not available for Timer yet")
         }
       
     }, [audioContext])

@@ -25,6 +25,7 @@ import useTimer from "./hooks/useTimer"
 import AudioTimer from "./timing/timer.audio"
 // import useKeyboard from "./hooks/useKeyboard"
 import {useKeyboard} from 'react-aria'
+import { Uploader } from "./uploader"
 
 // -----------------------------------------------------------------------------
 // Requires a user action so useEffect cannot be used here
@@ -96,12 +97,6 @@ const GsapTicker = () => {
 }
 
 
-const uploadMIDIFile = async (file) => {
-  const midiFile = await loadMIDIFileThroughClient( file, {}, (output)=>{
-    console.info("midi file loaded", file, " BPM", output)
-  } )
-}
-
 function getInput(keyboard, mouse) {
   let [x, y, z] = [0, 0, 0];
   // Checking keyboard inputs to determine movement direction
@@ -121,41 +116,38 @@ function getInput(keyboard, mouse) {
 
 const App = () => {
 
+  const [started, setStarted] = useState(false)
   const [track, setTrack] = useState(null)
   const [clock, setClock] = useState(null)
   const [audioContext, setAudioContext] = useState(null)
   // const keyboard = useKeyboard()
+
+  let active = false
   
   const cameraPosition = [0, 1.6, 2]
-  const trackPosition = [0, 0, -2]
-  const cameraFieldfView = 75
+  const cameraRotation = [90, 0, 0]
+  const cameraFieldOfView = 75
 
-  // let [events, setEvents] = useState([])
-  // let { keyboardProps } = useKeyboard({
-  //   onKeyDown: (e) =>
-  //     setEvents(
-  //       (events) => [`key down: ${e.key}`, ...events]
-  //     ),
-  //   onKeyUp: (e) =>
-  //     setEvents(
-  //       (events) => [`key up: ${e.key}`, ...events]
-  //     )
-  // })
+  // starting position of the musicEventss
+  const trackPosition = [0, 0, -5]
 
-  // useFrame(() => {
-  //   const speed = keyboard["Shift"] ? 2.0 : 1.0 // Adjusting the movement speed based on the running state
-  //   // Checking keyboard inputs to determine movement direction
-  //   if (keyboard["s"]) cameraPosition[2] += speed // Move backward
-  //   if (keyboard["w"]) cameraPosition[2] -= speed // Move forward
-  //   if (keyboard["d"]) cameraPosition[0] += speed // Move right
-  //   if (keyboard["a"]) cameraPosition[0] -= speed // Move left
-  //   if (keyboard[" "]) cameraPosition[1] += speed // Jump
+  let tempo = 90
 
-  //   console.info("cameraPosition", cameraPosition)
-  // })
-
+  const uploadMIDIFile = async (file) => {
+    const midiFile = await loadMIDIFileThroughClient( file, {}, (output)=>{
+      console.info("midi file loaded", file, " raw:", output)
+    } )
+    setTrack(midiFile)
+  }
+  
   // Create the front and backends
   const createClient = async() => {
+
+    if (started){
+      console.warn("Already started")
+      return
+    }
+
     const results = await createBackend()
   
     setAudioContext(results.audioContext)
@@ -164,11 +156,13 @@ const App = () => {
      
     console.info("createClient", results)
     xrStore.enterVR()
+    setStarted(true)
   }
-  
-  // const {beat, timer} = useTimer( audioContext )
-  // timer.startTimer()
 
+  const {beat, timer} = useTimer( audioContext, (data)=>{
+      console.info("tick @"+tempo+" BPM", {data, beat, timer})
+  }, tempo )
+  
   return (
     <>
       <Canvas
@@ -179,7 +173,7 @@ const App = () => {
         }}
       >
         <color args={[0x808080]} attach={"background"}></color>
-        <PerspectiveCamera makeDefault position={cameraPosition} fov={cameraFieldfView} />
+        <PerspectiveCamera makeDefault position={cameraPosition} angle={cameraRotation} fov={cameraFieldOfView} />
         <Environment preset="warehouse" />
        
         { 
@@ -214,38 +208,26 @@ const App = () => {
           color: "white",
         }}
       >
+        <Uploader callback={uploadMIDIFile} />
 
         {/* <p>Tempo: {timer?.BPM}</p>
         <p>Beat: {beat?.bar}</p> */}
         {/* <p>progress: {progress}</p> */}
-        
-        
 
-      
-        <button
-          onClick={() => uploadMIDIFile()}
-          style={{
-            position: "fixed",
-            inset: "0",
-            opacity:"0",
-            fontSize: "20px",
-          }}
-        >
-          Upload MIDI File
-        </button>
-
-        <button
-          onClick={() => createClient()}
-          style={{
-            position: "fixed",
-            bottom: "20px",
-            left: "10%",
-            fontSize: "20px",
-            zIndex:"303"
-          }}
-        >
-          Start
-        </button>
+        { !started && 
+                <button
+                  onClick={() => createClient()}
+                  style={{
+                    position: "fixed",
+                    bottom: "20px",
+                    left: "10%",
+                    fontSize: "20px",
+                    zIndex:"303"
+                  }}
+                >
+                  Start
+                </button>
+        }
 
       </div>
     </>
