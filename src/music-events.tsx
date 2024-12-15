@@ -18,6 +18,8 @@ import AudioTimer from "./timing/timer.audio"
 import MidiTrack from "./audio/midi/midi-track"
 import { Text } from "@react-three/drei"
 import useTimer from "./hooks/useTimer"
+import { noteNumberToFrequency } from "./audio/tuning/frequencies"
+import OscillatorInstrument from "./audio/instruments/instrument.oscillator"
 
 type TargetProps = {
     track:MidiTrack,
@@ -34,8 +36,37 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
 
     const musicEventRef = useRef<Group>(null)
     const camera = useThree(state => state.camera)
-    
+
+    const instrument = new OscillatorInstrument( audioContext )
+    const mixer = audioContext.createGain()	
+    mixer.gain.value = 0
+    instrument.output.connect( mixer )
+	mixer.connect( audioContext.destination )
+    // instrument.noteOn( 0 )
+    // instrument.noteOff()
+
     let tempo = 90
+
+    const onInteraction = (type, data) => {
+       
+        const frequency = noteNumberToFrequency( data.pitch )
+       // oscillator.frequency.value = Math.random() * 1000
+       switch( type)
+       {
+           case "hover":
+                // instrument.noteOn( data.pitch )
+                mixer.gain.value = 1
+                console.info("NOTE ON", frequency,{type, data} )
+                break
+
+           case "unhover":
+           case "click":
+                // instrument.noteOff()
+                mixer.gain.value = 0
+                console.info("NOTE OFF", frequency,{type, data} )
+                break
+       }
+    }
         
     const {beat, timer} = useTimer( audioContext, (data)=>{
         // initialCameraPosition[1] += 0.5
@@ -91,8 +122,6 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
         // console.log(now, "RENDER loop MusicEvents MIDI File", {track} )
     })
 
-    
-
     // MIDI Track has populated
     return (
         <group ref={musicEventRef} position={position}>
@@ -106,6 +135,7 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
                                 velocity={command.velocity}  
                                 startTime={command.percentStart} 
                                 duration={command.percentDuration} 
+                                onInteraction={onInteraction} 
                             />
                     //  return <MusicEvent
                     //             index={index}

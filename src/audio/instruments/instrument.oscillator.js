@@ -103,7 +103,7 @@ export default class OscillatorInstrument extends Instrument{
 
 	async noteOn( noteNumber, velocity=1 ){
 	
-		console.error("oscillator",this,  this.options, this.oscillator.frequency.value, {noteNumber, velocity})
+		// console.error("oscillator",this,  this.options, this.oscillator.frequency.value, {noteNumber, velocity})
 	
 		this.envelope.gain.setValueAtTime(1, 0)
 		// this.oscillator.linearRampToValueAtTime(0.1, 4)
@@ -119,7 +119,7 @@ export default class OscillatorInstrument extends Instrument{
 	}
 	
 	async noteOff(noteNumber, velocity=0){
-		this.envelope.gain.setValueAtTime( 0, this.options.fadeDuration )
+		this.envelope.gain.setValueAtTime( 0, velocity ?? this.options.fadeDuration )
 		return super.noteOff(noteNumber)
 	}
 
