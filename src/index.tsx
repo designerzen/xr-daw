@@ -130,17 +130,17 @@ const App = () => {
   const trackPosition = [0, 0, -2]
   const cameraFieldfView = 75
 
-  let [events, setEvents] = useState([])
-  let { keyboardProps } = useKeyboard({
-    onKeyDown: (e) =>
-      setEvents(
-        (events) => [`key down: ${e.key}`, ...events]
-      ),
-    onKeyUp: (e) =>
-      setEvents(
-        (events) => [`key up: ${e.key}`, ...events]
-      )
-  })
+  // let [events, setEvents] = useState([])
+  // let { keyboardProps } = useKeyboard({
+  //   onKeyDown: (e) =>
+  //     setEvents(
+  //       (events) => [`key down: ${e.key}`, ...events]
+  //     ),
+  //   onKeyUp: (e) =>
+  //     setEvents(
+  //       (events) => [`key up: ${e.key}`, ...events]
+  //     )
+  // })
 
   // useFrame(() => {
   //   const speed = keyboard["Shift"] ? 2.0 : 1.0 // Adjusting the movement speed based on the running state

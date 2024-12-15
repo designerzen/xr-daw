@@ -81,7 +81,7 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
                                 index={index}
                                 key={command.id} 
                                 pitch={command.noteNumber} 
-                                velocity={(Math.abs(command.velocity) / 128 - 1)}  
+                                velocity={command.velocity}  
                                 startTime={command.percentStart} 
                                 duration={command.percentDuration} 
                             />
