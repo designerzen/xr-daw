@@ -20,6 +20,7 @@ import { Text } from "@react-three/drei"
 import useTimer from "./hooks/useTimer"
 import { noteNumberToFrequency } from "./audio/tuning/frequencies"
 import OscillatorInstrument from "./audio/instruments/instrument.oscillator"
+import { WebMidi } from "webmidi"
 
 type TargetProps = {
     track:MidiTrack,
@@ -37,6 +38,8 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
     const musicEventRef = useRef<Group>(null)
     const camera = useThree(state => state.camera)
 
+    let midiOut = null
+
     const instrument = new OscillatorInstrument( audioContext )
     const mixer = audioContext.createGain()	
     mixer.gain.value = 0
@@ -44,6 +47,23 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
 	mixer.connect( audioContext.destination )
     // instrument.noteOn( 0 )
     // instrument.noteOff()
+
+    WebMidi
+        .enable()
+        .then(onEnabled)
+        .catch(err => alert(err));
+    
+    function onEnabled() {
+        
+        // Inputs
+        // WebMidi.inputs.forEach(input => console.log(input.manufacturer, input.name));
+        
+        // Outputs
+        WebMidi.outputs.forEach(output => {
+            console.log(output.manufacturer, output.name)
+            midiOut = output
+         })
+    }
 
     let tempo = 90
 
@@ -54,15 +74,23 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
        switch( type)
        {
            case "hover":
-                // instrument.noteOn( data.pitch )
+                instrument.noteOn( data.pitch )
                 mixer.gain.value = 1
+                if (midiOut)
+                {
+                    midiOut.playNote(data.pitch, { velocity:data.velocity, duration:data.duration})
+                }
                 console.info("NOTE ON", frequency,{type, data} )
                 break
 
            case "unhover":
            case "click":
-                // instrument.noteOff()
+                instrument.noteOff()
                 mixer.gain.value = 0
+                if (midiOut)
+                {
+                    midiOut.stopNote(data.pitch)
+                }
                 console.info("NOTE OFF", frequency,{type, data} )
                 break
        }
