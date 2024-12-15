@@ -219,6 +219,21 @@ const App = () => {
         <p>Beat: {beat?.bar}</p> */}
         {/* <p>progress: {progress}</p> */}
         
+        
+
+      
+        <button
+          onClick={() => uploadMIDIFile()}
+          style={{
+            position: "fixed",
+            inset: "0",
+            opacity:"0",
+            fontSize: "20px",
+          }}
+        >
+          Upload MIDI File
+        </button>
+
         <button
           onClick={() => createClient()}
           style={{
@@ -226,23 +241,10 @@ const App = () => {
             bottom: "20px",
             left: "10%",
             fontSize: "20px",
+            zIndex:"303"
           }}
         >
           Start
-        </button>
-
-      
-        <button
-          onClick={() => uploadMIDIFile()}
-          style={{
-            position: "fixed",
-            bottom: "20px",
-            left: "66%",
-            top: "0",
-            fontSize: "20px",
-          }}
-        >
-          Upload MIDI File
         </button>
 
       </div>

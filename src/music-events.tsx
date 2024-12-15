@@ -68,8 +68,8 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
 
     // TOCK
     useFrame(() => {
-        // const now = performance.now()
-        // console.log(now, "RENDER loop MusicEvents MIDI File", track )
+        const now = performance.now()
+        console.log(now, "RENDER loop MusicEvents MIDI File", {track}, beat )
     })
 
     // MIDI Track has populated
@@ -81,10 +81,18 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
                                 index={index}
                                 key={command.id} 
                                 pitch={command.noteNumber} 
-                                velocity={command.velocity} 
-                                startTime={command.startTime} 
-                                duration={command.duration} 
+                                velocity={(Math.abs(command.velocity) / 128 - 1)}  
+                                startTime={command.percentStart} 
+                                duration={command.percentDuration} 
                             />
+                    //  return <MusicEvent
+                    //             index={index}
+                    //             key={command.id} 
+                    //             pitch={command.noteNumber} 
+                    //             velocity={command.velocity} 
+                    //             startTime={command.startTime} 
+                    //             duration={command.duration} 
+                    //         />
                 })
             }
         </group>)

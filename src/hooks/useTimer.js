@@ -21,7 +21,11 @@ export default function useTimer( audioContext, tempo = 90 ) {
             // so you can set the progress of the timeline with it 
             // and ignore the other 23 events 
             // setBeat(values.bar)
-            console.info("tick @"+tempo+" BPM", values)
+            beat.bar = values.bar
+            beat.barsElapsed = values.barsElapsed
+            beat.divisionsElapsed = values.divisionsElapsed
+            beat.timePassed = values.timePassed
+            console.info("tick @"+tempo+" BPM", {values, beat})
           })
           
           clock.startTimer()

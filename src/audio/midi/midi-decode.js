@@ -209,6 +209,8 @@ const convertEventToCommand = (stream) =>
 		decodeChannelEvent( stream, event, eventTypeByte)
 }
 
+const formatVelocity = (velocity) => Math.abs(velocity / 127)
+
 /**
  * Control the instrument's 16 voices (timbres, patches),
  * plays notes, sends controller data, etc.
@@ -249,7 +251,7 @@ const decodeChannelEvent = (stream, event, eventTypeByte ) =>
 			//'noteOff';
 			event.noteNumber = firstParameter
 			event.noteName = convertMIDINoteNumberToName(firstParameter)
-			event.velocity = stream.readInt8()
+			event.velocity = formatVelocity(stream.readInt8())
 			//event.raw += `"subtype":${event.subtype},"noteNumber":${firstParameter}`
 			return event
 
@@ -257,7 +259,7 @@ const decodeChannelEvent = (stream, event, eventTypeByte ) =>
 		case 0x09:
 			event.noteNumber = firstParameter
 			event.noteName = convertMIDINoteNumberToName(firstParameter)
-			event.velocity = stream.readInt8()
+			event.velocity = formatVelocity(stream.readInt8() )
 			
 			if (event.velocity === 0)
 			{
