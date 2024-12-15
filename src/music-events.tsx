@@ -10,21 +10,43 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { useRef } from "react"
-import MidiTrack from "./audio/midi/midi-track"
+import { useRef, useState } from "react"
 import { MusicEvent } from "./music-event"
 import { useFrame } from "@react-three/fiber"
 
+import AudioTimer from "./timing/timer.audio"
+import MidiTrack from "./audio/midi/midi-track"
+import { Text } from "@react-three/drei"
+import useTimer from "./hooks/useTimer"
+
 type TargetProps = {
-    track:MidiTrack
+    track:MidiTrack,
+    audioContext:AudioContext
 }
 
-export const MusicEvents = ({ track }: TargetProps) => {
+export const MusicEvents = ({ track, audioContext }: TargetProps) => {
+    
     const musicEventRef = useRef<Group>(null)
-    useFrame(() => {
-        const now = performance.now()
-        console.log(now, "RENDER loop MusicEvents MIDI File", track )
-    })
+    // const [progress, setProgress] = useState(0)
+
+    if (!audioContext){
+        return <></>
+    }
+
+    const {beat, timer} = useTimer( audioContext )
+
+    // clock.setCallback( values =>{
+    //     // This happens 24 times per quarter note
+    //     // so you can set the progress of the timeline with it 
+    //     // and ignore the other 23 events 
+        
+    //     const r = values.divisionsElapsed + (values.barsElapsed * 24)
+    //     console.info("tick", r, {values}  )
+    //     // setProgress( r )
+    // })
+        
+    // // Timing options
+    // clock.startTimer()
 
    // MIDI Track has not loaded yet! 
     if (!track || !track.noteOnCommands)
@@ -43,13 +65,18 @@ export const MusicEvents = ({ track }: TargetProps) => {
                 </Text>
     }
 
+    // TOCK
+    useFrame(() => {
+        // const now = performance.now()
+        // console.log(now, "RENDER loop MusicEvents MIDI File", track )
+    })
+
     // MIDI Track has populated
     return (
         <group ref={musicEventRef}>
             {
                 track.noteOnCommands.map((command, index) => {
-                    console.info("MusicEvent", {command, track} )
-                    return <MusicEvent
+                     return <MusicEvent
                                 key={index} 
                                 index={index}
                                 pitch={command.noteNumber} 

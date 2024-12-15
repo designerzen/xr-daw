@@ -13,8 +13,6 @@
  * LICENSE file in the root directory of this source tree.
  * 
  */
-
-import { useFrame } from '@react-three/fiber'
 import { useRef, forwardRef } from 'react'
 
 type TargetProps = {
@@ -30,19 +28,22 @@ export const MusicEventProxy = ({
     index, 
     pitch,
     velocity,
-    startTime,
-    duration,
-    color ="orange" 
+    startTime = 0,
+    duration = 1
 }: TargetProps, ref : React.Ref<any>) => {
 
+    {/* TODO: Bind the args to the geometry */}
     const height = 1
-    const width = 1 * velocity
-    const depth = 1 * duration
+    const width = 1 * (velocity ?? 1)
+    const depth = 1 * (duration ?? 1)
+    const position = [ startTime, 0.67, -1.44]
+    const color = `hsl(${pitch}, 100%, 50%)`
 
+    console.info(index, "MusicEvent", {width, height, depth, color, pitch, velocity, startTime, duration, position} ) 
+                  
     // TODO : Create this colour as a function of the pitch!
     return (
-        <mesh ref={ref}>
-            {/* TODO: Bind the args to the geometry */}
+        <mesh ref={ref} position={position} >
             <boxGeometry args={[width, height, depth]} />
             <meshStandardMaterial color={color} />
         </mesh>)

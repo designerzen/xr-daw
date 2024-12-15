@@ -16,14 +16,14 @@ import { Gun } from "./gun"
 import { Score } from "./score"
 import { Target } from "./targets"
 
-import AudioTimer from "./timing/timer.audio"
 import { loadMIDIFile, loadMIDIFileThroughClient } from "./audio/midi/midi-file"
 
 import gsap from "gsap"
 import { MusicEvents } from "./music-events"
+import { useState } from "react"
+import useTimer from "./hooks/useTimer"
+import AudioTimer from "./timing/timer.audio"
 
-
-let timer, midiData, context
 // -----------------------------------------------------------------------------
 // Requires a user action so useEffect cannot be used here
 const createBackend = async () => {
@@ -34,20 +34,9 @@ const createBackend = async () => {
     audioContext.resume()
   }
 
-  // Timing options
-  let tempo = 90
 
   // Create timing loop
   const clock = new AudioTimer( audioContext )
-  clock.BPM = tempo
-  clock.setCallback( ( values )=>{
-    // This happens 24 times per quarter note
-    // so you can set the progress of the timeline with it 
-    // and ignore the other 23 events 
-    console.info("tick @"+tempo+" BPM", values)
-  })
-
-  clock.startTimer()
 
   // -----------------------------------------------------------------------------
   // MIDI File options
@@ -59,7 +48,7 @@ const createBackend = async () => {
 
   // Load in a local MIDI file from a relative URI
   const midiFile = await loadMIDIFile( "./assets/midi/midi_nyan-cat.mid", options, (values)=>{
-    console.info("midi file loaded", options, {values} )
+    // console.info("midi file loaded", options, {values} )
   } )
 
   console.info("Midi file loaded", midiFile)
@@ -104,17 +93,6 @@ const GsapTicker = () => {
   return null
 }
 
-// Create the front and backends
-const createClient = async() => {
-  const results = await createBackend()
-  timer = results.clock
-  midiData = results.midiFile
-  context = results.audioContext
-  xrStore.enterVR()
-
-  // FIXME: 
-  timer.startTimer()
-}
 
 const uploadMIDIFile = async (file) => {
   const midiFile = await loadMIDIFileThroughClient( file, {}, (output)=>{
@@ -123,6 +101,26 @@ const uploadMIDIFile = async (file) => {
 }
 
 const App = () => {
+
+  const [track, setTrack] = useState(null)
+  const [clock, setClock] = useState(null)
+  const [audioContext, setAudioContext] = useState(null)
+
+  // Create the front and backends
+  const createClient = async() => {
+    const results = await createBackend()
+  
+    setAudioContext(results.audioContext)
+    setTrack(results.midiFile)
+    setClock(results.clock)
+     
+    console.info("createClient", results)
+    // xrStore.enterVR()
+  }
+  
+  // const {beat, timer} = useTimer( audioContext )
+  // timer.startTimer()
+
   return (
     <>
       <Canvas
@@ -137,9 +135,7 @@ const App = () => {
         <Environment preset="warehouse" />
        
         { 
-          ( midiData !== undefined ) ?? <MusicEvents 
-            track={midiData} 
-            key={midiData.duration} />
+          track !== null && audioContext !== null ? <MusicEvents audioContext={audioContext} track={track}/> : null
         }
 
         {/* <Bullets /> */}
@@ -170,8 +166,13 @@ const App = () => {
           color: "white",
         }}
       >
+
+        {/* <p>Tempo: {timer?.BPM}</p>
+        <p>Beat: {beat?.bar}</p> */}
+        {/* <p>progress: {progress}</p> */}
+        
         <button
-          onClick={() => createBackend()}
+          onClick={() => createClient()}
           style={{
             position: "fixed",
             bottom: "20px",
