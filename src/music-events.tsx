@@ -12,7 +12,7 @@
 
 import { useRef, useState } from "react"
 import { MusicEvent } from "./music-event"
-import { useFrame } from "@react-three/fiber"
+import { useFrame, useThree } from "@react-three/fiber"
 
 import AudioTimer from "./timing/timer.audio"
 import MidiTrack from "./audio/midi/midi-track"
@@ -21,13 +21,35 @@ import useTimer from "./hooks/useTimer"
 
 type TargetProps = {
     track:MidiTrack,
-    clock:AudioTimer,
+    audioContext:AudioContext,
     position:number[]
 }
 
-export const MusicEvents = ({ track, clock, position=[0,0,0] }: TargetProps) => {
+export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetProps) => {
     
+    if (!audioContext)
+    {
+        return (<></>)
+    }
     const musicEventRef = useRef<Group>(null)
+    const camera = useThree(state => state.camera)
+    
+    let tempo = 90
+        
+    const {beat, timer} = useTimer( audioContext, (data)=>{
+        // initialCameraPosition[1] += 0.5
+
+        // setCameraPosition( (old)=>{
+        //   return [ old[0], old[1]+0.5, old[2] ] 
+        // })
+
+        camera.position.y += 5
+
+        position[1] += 1
+
+        console.info("tick @"+tempo+" camera", camera.position.y, {data, camera}) 
+    }, tempo )
+
     // const [progress, setProgress] = useState(0)
 
     // const {beat, timer} = useTimer( audioContext, ()=>{}, 90 )
@@ -67,6 +89,8 @@ export const MusicEvents = ({ track, clock, position=[0,0,0] }: TargetProps) => 
         const now = performance.now()
         // console.log(now, "RENDER loop MusicEvents MIDI File", {track} )
     })
+
+    
 
     // MIDI Track has populated
     return (

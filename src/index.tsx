@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { Canvas, useFrame } from "@react-three/fiber"
+import { Canvas, useFrame, useThree } from "@react-three/fiber"
 import { Environment, PerspectiveCamera } from "@react-three/drei"
 import { XR, createXRStore } from "@react-three/xr"
 
@@ -39,7 +39,7 @@ const createBackend = async () => {
 
 
   // Create timing loop
-  const clock = new AudioTimer( audioContext )
+  // const clock = new AudioTimer( audioContext )
 
   // -----------------------------------------------------------------------------
   // MIDI File options
@@ -56,7 +56,7 @@ const createBackend = async () => {
 
   console.info("Midi file loaded", midiFile)
 
-  return { audioContext, clock, midiFile }
+  return { audioContext, midiFile }
 }
 
 
@@ -83,10 +83,7 @@ const xrStore = createXRStore({
   },
   controller: {
     right: Gun,
-  },
-//  timer:{}, 
-//  midiData:{}, 
-//  context:{}
+  }
 })
 
 const GsapTicker = () => {
@@ -96,42 +93,24 @@ const GsapTicker = () => {
   return null
 }
 
-
-function getInput(keyboard, mouse) {
-  let [x, y, z] = [0, 0, 0];
-  // Checking keyboard inputs to determine movement direction
-  if (keyboard["s"]) z += 1.0; // Move backward
-  if (keyboard["w"]) z -= 1.0; // Move forward
-  if (keyboard["d"]) x += 1.0; // Move right
-  if (keyboard["a"]) x -= 1.0; // Move left
-  if (keyboard[" "]) y += 1.0; // Jump
-
-  // Returning an object with the movement and look direction
-  return {
-    move: [x, y, z],
-    look: [mouse.x / window.innerWidth, mouse.y / window.innerHeight], // Mouse look direction
-    running: keyboard["Shift"], // Boolean to determine if the player is running (Shift key pressed)
-  };
-}
-
 const App = () => {
 
   const [started, setStarted] = useState(false)
   const [track, setTrack] = useState(null)
-  const [clock, setClock] = useState(null)
   const [audioContext, setAudioContext] = useState(null)
   // const keyboard = useKeyboard()
 
   let active = false
   
-  const cameraPosition = [0, 1.6, 2]
+  const initialCameraPosition = [0, 1.6, 2]
+  const [cameraPosition, setCameraPosition] = useState(initialCameraPosition)
+
   const cameraRotation = [90, 0, 0]
   const cameraFieldOfView = 75
 
   // starting position of the musicEventss
   const trackPosition = [0, 0, -5]
 
-  let tempo = 90
 
   const uploadMIDIFile = async (file) => {
     const midiFile = await loadMIDIFileThroughClient( file, {}, (output)=>{
@@ -152,16 +131,24 @@ const App = () => {
   
     setAudioContext(results.audioContext)
     setTrack(results.midiFile)
-    setClock(results.clock)
      
     console.info("createClient", results)
     xrStore.enterVR()
+
     setStarted(true)
   }
 
-  const {beat, timer} = useTimer( audioContext, (data)=>{
-      console.info("tick @"+tempo+" BPM", {data, beat, timer})
-  }, tempo )
+  // const {beat, timer} = useTimer( audioContext, (data)=>{
+  //     // initialCameraPosition[1] += 0.5
+
+  //     // setCameraPosition( (old)=>{
+  //     //   return [ old[0], old[1]+0.5, old[2] ] 
+  //     // })
+
+  //     // camera.position.y += 0.5
+
+  //     console.info("tick @"+tempo+" BPM", {data, camera}) 
+  // }, tempo )
   
   return (
     <>
@@ -173,7 +160,7 @@ const App = () => {
         }}
       >
         <color args={[0x808080]} attach={"background"}></color>
-        <PerspectiveCamera makeDefault position={cameraPosition} angle={cameraRotation} fov={cameraFieldOfView} />
+        <PerspectiveCamera makeDefault position={initialCameraPosition} angle={cameraRotation} fov={cameraFieldOfView} />
         <Environment preset="warehouse" />
        
         { 
