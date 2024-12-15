@@ -7,7 +7,6 @@ export default function useTimer( audioContext, tempo = 90 ) {
     // const [beat, setBeat] = useState(0)
     const beat = useMemo( () => ({}), []) // Create a memoized object to store keyboard state
 
-
     let clock
 
     useEffect(() => {

@@ -163,7 +163,7 @@ const App = () => {
     setClock(results.clock)
      
     console.info("createClient", results)
-    // xrStore.enterVR()
+    xrStore.enterVR()
   }
   
   // const {beat, timer} = useTimer( audioContext )
@@ -228,23 +228,10 @@ const App = () => {
             fontSize: "20px",
           }}
         >
-          Create Backend
+          Start
         </button>
 
-        <button
-          onClick={() => createClient()}
-          style={{
-            position: "fixed",
-            bottom: "20px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            fontSize: "20px",
-          }}
-        >
-          Begin VR
-        </button>
-
-
+      
         <button
           onClick={() => uploadMIDIFile()}
           style={{
