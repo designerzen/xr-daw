@@ -21,10 +21,11 @@ import useTimer from "./hooks/useTimer"
 
 type TargetProps = {
     track:MidiTrack,
-    audioContext:AudioContext
+    audioContext:AudioContext,
+    position:number[]
 }
 
-export const MusicEvents = ({ track, audioContext }: TargetProps) => {
+export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetProps) => {
     
     const musicEventRef = useRef<Group>(null)
     // const [progress, setProgress] = useState(0)
@@ -33,7 +34,7 @@ export const MusicEvents = ({ track, audioContext }: TargetProps) => {
         return <></>
     }
 
-    const {beat, timer} = useTimer( audioContext )
+    const {beat, timer} = useTimer( audioContext, 90 )
 
     // clock.setCallback( values =>{
     //     // This happens 24 times per quarter note
@@ -73,7 +74,7 @@ export const MusicEvents = ({ track, audioContext }: TargetProps) => {
 
     // MIDI Track has populated
     return (
-        <group ref={musicEventRef}>
+        <group ref={musicEventRef} position={position}>
             {
                 track.noteOnCommands.map((command, index) => {
                      return <MusicEvent
@@ -83,7 +84,7 @@ export const MusicEvents = ({ track, audioContext }: TargetProps) => {
                                 velocity={command.velocity} 
                                 startTime={command.startTime} 
                                 duration={command.duration} 
-                                color={command.velocity} />
+                            />
                 })
             }
         </group>)

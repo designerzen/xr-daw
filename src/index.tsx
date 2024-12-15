@@ -23,6 +23,8 @@ import { MusicEvents } from "./music-events"
 import { useState } from "react"
 import useTimer from "./hooks/useTimer"
 import AudioTimer from "./timing/timer.audio"
+// import useKeyboard from "./hooks/useKeyboard"
+import {useKeyboard} from 'react-aria'
 
 // -----------------------------------------------------------------------------
 // Requires a user action so useEffect cannot be used here
@@ -100,11 +102,57 @@ const uploadMIDIFile = async (file) => {
   } )
 }
 
+function getInput(keyboard, mouse) {
+  let [x, y, z] = [0, 0, 0];
+  // Checking keyboard inputs to determine movement direction
+  if (keyboard["s"]) z += 1.0; // Move backward
+  if (keyboard["w"]) z -= 1.0; // Move forward
+  if (keyboard["d"]) x += 1.0; // Move right
+  if (keyboard["a"]) x -= 1.0; // Move left
+  if (keyboard[" "]) y += 1.0; // Jump
+
+  // Returning an object with the movement and look direction
+  return {
+    move: [x, y, z],
+    look: [mouse.x / window.innerWidth, mouse.y / window.innerHeight], // Mouse look direction
+    running: keyboard["Shift"], // Boolean to determine if the player is running (Shift key pressed)
+  };
+}
+
 const App = () => {
 
   const [track, setTrack] = useState(null)
   const [clock, setClock] = useState(null)
   const [audioContext, setAudioContext] = useState(null)
+  // const keyboard = useKeyboard()
+  
+  const cameraPosition = [0, 1.6, 2]
+  const trackPosition = [0, 0, -2]
+  const cameraFieldfView = 75
+
+  let [events, setEvents] = useState([])
+  let { keyboardProps } = useKeyboard({
+    onKeyDown: (e) =>
+      setEvents(
+        (events) => [`key down: ${e.key}`, ...events]
+      ),
+    onKeyUp: (e) =>
+      setEvents(
+        (events) => [`key up: ${e.key}`, ...events]
+      )
+  })
+
+  // useFrame(() => {
+  //   const speed = keyboard["Shift"] ? 2.0 : 1.0 // Adjusting the movement speed based on the running state
+  //   // Checking keyboard inputs to determine movement direction
+  //   if (keyboard["s"]) cameraPosition[2] += speed // Move backward
+  //   if (keyboard["w"]) cameraPosition[2] -= speed // Move forward
+  //   if (keyboard["d"]) cameraPosition[0] += speed // Move right
+  //   if (keyboard["a"]) cameraPosition[0] -= speed // Move left
+  //   if (keyboard[" "]) cameraPosition[1] += speed // Jump
+
+  //   console.info("cameraPosition", cameraPosition)
+  // })
 
   // Create the front and backends
   const createClient = async() => {
@@ -131,11 +179,11 @@ const App = () => {
         }}
       >
         <color args={[0x808080]} attach={"background"}></color>
-        <PerspectiveCamera makeDefault position={[0, 1.6, 2]} fov={75} />
+        <PerspectiveCamera makeDefault position={cameraPosition} fov={cameraFieldfView} />
         <Environment preset="warehouse" />
        
         { 
-          track !== null && audioContext !== null ? <MusicEvents audioContext={audioContext} track={track}/> : null
+          track !== null && audioContext !== null ? <MusicEvents audioContext={audioContext} track={track} position={trackPosition}/> : null
         }
 
         {/* <Bullets /> */}
