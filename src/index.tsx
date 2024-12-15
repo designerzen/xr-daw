@@ -130,7 +130,15 @@ const App = () => {
     const results = await createBackend()
   
     setAudioContext(results.audioContext)
-    setTrack(results.midiFile)
+
+    // if track was already set from the 
+    if (!track)
+    {
+      console.info("Using default MIDI track")
+      setTrack(results.midiFile)
+    }else{
+      console.info("Used custom track")
+    }
      
     console.info("createClient", results)
     xrStore.enterVR()

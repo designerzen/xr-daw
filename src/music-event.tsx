@@ -21,6 +21,7 @@ type TargetProps = {
     pitch:number,
     velocity:number,
     startTime:number,
+    programNumber:number,
     duration:number,
     color:number|string
 }
@@ -29,6 +30,7 @@ export const MusicEventProxy = ({
     index, 
     pitch,
     velocity,
+    programNumber = 1,
     startTime = 0,
     duration = 1
 }: TargetProps, ref : React.Ref<any>) => {
@@ -36,18 +38,20 @@ export const MusicEventProxy = ({
     const scaleFactor = 0.2
     const randomNumber = Math.random() * 360
 
-    const width = scaleFactor * (duration ?? 1)
-    const height = 10 * scaleFactor * (velocity ?? 1)
-    const depth = 30 * scaleFactor 
+    const width = scaleFactor * (duration ?? 1) + 0.5
+    const height = 10  * (velocity ?? 1)
+    const depth = 10 //* (velocity ?? 1)
 
     const x = startTime * scaleFactor + index
-    const y = velocity * scaleFactor * 10
-    const z = duration * scaleFactor * 5
+    const y = 1 + programNumber
+    const z = -1 * 5
+    // const y = velocity * scaleFactor + patch
+    // const z = duration * scaleFactor * 5
 
     // const color = `hsl(${randomNumber}, +  100%, 50%)`
     const color = `hsl(${(pitch * 6)%360}, 100%, 50%)`
 
-    console.info(index, "MusicEvent", { x,y,z, width, height, depth, color} )  
+    console.info(index, "MusicEvent", { x,y,z, width, height, depth, color, programNumber} )  
     // console.info(index, "MusicEvent", pitch, {width, height, depth, color, pitch, velocity, startTime, duration, position} ) 
                   
     // TODO : Create this colour as a function of the pitch!
@@ -55,7 +59,7 @@ export const MusicEventProxy = ({
         <mesh 
             ref={ref} 
             position={[ x, y, z]} 
-            >
+        >
             <boxGeometry args={[
                 width, 
                 height, 

@@ -54,6 +54,7 @@ export default class MIDICommand extends AudioCommand
 	percentStart
 	percentDuration
 
+	// programNumber
 
 	constructor(){
 		super()

@@ -157,13 +157,14 @@ const decodeTracks = ( track, stream ) =>
 	if (track.duration > 0 )
 	{
 		const activemusicalEvents = new Map()
+		let activeInstrument = undefined
 		track.commands.forEach( command => {
 
 			switch(command.subtype)
 			{
 				case "noteOn":
 					activemusicalEvents.set(command.noteNumber, command)
-					
+					command.programNumber = activeInstrument
 					break
 
 				case "noteOff":
@@ -177,11 +178,15 @@ const decodeTracks = ( track, stream ) =>
 						activemusicalEvents.delete(command.noteNumber)
 					}
 					break
+
+				case "programChange":
+					activeInstrument = command.programNumber
+					console.info("Instrument changed to", activeInstrument)
+					break
 			}
 
-			console.info("MIDI Command", {command, activemusicalEvents} ) 
+			// console.info("MIDI Command", {command, activemusicalEvents} ) 
 			command.percentStart = command.time ? command.time / track.duration : -1
-			
 		})
 
 		console.info("MIDI File loaded with duration", track.duration, {activemusicalEvents} )
