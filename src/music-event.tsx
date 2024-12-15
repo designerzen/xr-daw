@@ -35,30 +35,32 @@ export const MusicEventProxy = ({
 
     const scaleFactor = 0.2
     const randomNumber = Math.random() * 360
-    const width = scaleFactor * (duration ?? 1)
-    const height = 3 * scaleFactor * (velocity ?? 1)
-    const depth = scaleFactor 
 
-    const position = new Vector3( startTime * scaleFactor + index, 
-        velocity * scaleFactor * 1, 
-        duration * scaleFactor * 1)
+    const width = scaleFactor * (duration ?? 1)
+    const height = 10 * scaleFactor * (velocity ?? 1)
+    const depth = 30 * scaleFactor 
+
+    const x = startTime * scaleFactor + index
+    const y = velocity * scaleFactor * 10
+    const z = duration * scaleFactor * 5
 
     // const color = `hsl(${randomNumber}, +  100%, 50%)`
     const color = `hsl(${(pitch * 6)%360}, 100%, 50%)`
 
-    console.info(index, "MusicEvent", position, [width, height, depth] , color ) 
+    console.info(index, "MusicEvent", { x,y,z, width, height, depth, color} )  
     // console.info(index, "MusicEvent", pitch, {width, height, depth, color, pitch, velocity, startTime, duration, position} ) 
                   
     // TODO : Create this colour as a function of the pitch!
     return (
         <mesh 
             ref={ref} 
-            position={[ 
-                startTime * scaleFactor + index, 
-                velocity * scaleFactor * 10, 
-                duration * scaleFactor * 5
-            ]} >
-            <boxGeometry args={[width, height, depth]} />
+            position={[ x, y, z]} 
+            >
+            <boxGeometry args={[
+                width, 
+                height, 
+                depth
+            ]} />
             <meshStandardMaterial color={color} />
         </mesh>)
 }
