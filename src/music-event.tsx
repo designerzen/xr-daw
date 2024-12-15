@@ -43,7 +43,7 @@ export const MusicEventProxy = ({
     const depth = 10 //* (velocity ?? 1)
 
     const x = startTime * scaleFactor + index
-    const y = 1 + programNumber
+    const y = 1 + programNumber + height / 2
     const z = -1 * 5
     // const y = velocity * scaleFactor + patch
     // const z = duration * scaleFactor * 5

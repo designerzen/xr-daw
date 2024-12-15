@@ -6,7 +6,7 @@
  */
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
-import { Environment, PerspectiveCamera } from "@react-three/drei"
+import { Environment, Gltf, PerspectiveCamera } from "@react-three/drei"
 import { XR, createXRStore } from "@react-three/xr"
 
 import ReactDOM from "react-dom/client"
@@ -201,6 +201,7 @@ const App = () => {
           justifyContent: "space-between",
           alignItems: "center",
           color: "white",
+          fontFamily: "SpaceMono-Bold, sans-serif",
         }}
       >
         <Uploader callback={uploadMIDIFile} />
@@ -215,7 +216,7 @@ const App = () => {
                   style={{
                     position: "fixed",
                     bottom: "20px",
-                    left: "10%",
+                    left: "20px",
                     fontSize: "20px",
                     zIndex:"303"
                   }}

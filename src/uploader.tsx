@@ -40,7 +40,8 @@ export function Uploader({ accept = "audio/midi", callback=()=>{} }: { accept?: 
             position: "fixed",
             inset: "0",
             fontSize: "20px",
-            zIndex:"101"
+            zIndex:"101",
+            padding: "20px",
         }}
         onDragOver={handleDragOver}
         onDrop={handleFileDrop}
