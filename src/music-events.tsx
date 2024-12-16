@@ -74,7 +74,7 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
        switch( type)
        {
            case "hover":
-                instrument.noteOn( data.pitch )
+                instrument.noteOn( data.pitch, data.velocity )
                 mixer.gain.value = 1
                 if (midiOut)
                 {
