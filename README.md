@@ -13,8 +13,8 @@ To prepare your development environment and get started with building your WebXR
 1. **Clone this repository**:
 
    ```bash
-   git clone git@github.com:meta-quest/webxr-first-steps-react.git
-   cd webxr-first-steps-react
+   gh repo clone designerzen/xr-daw
+   cd xr-daw
    ```
 
 2. **Verify that you have Node.js and npm installed**:
