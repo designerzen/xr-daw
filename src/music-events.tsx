@@ -4,8 +4,6 @@
  * - Feed it a MidiTrack instance
  * ============================================================
  * 
- * Copyright (c) Meta Platforms, Inc. and affiliates.
- *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
@@ -35,7 +33,7 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
         return (<></>)
     }
 
-    const musicEventRef = useRef<Group>(null)
+    const musicEventsRef = useRef<Group>(null)
     const camera = useThree(state => state.camera)
 
     let midiOut = null
@@ -152,7 +150,7 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
 
     // MIDI Track has populated
     return (
-        <group ref={musicEventRef} position={position}>
+        <group ref={musicEventsRef} position={position}>
             {
                 track.noteOnCommands.map((command, index) => {
                      return <MusicEvent

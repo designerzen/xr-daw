@@ -15,17 +15,17 @@ import { Bullets } from "./bullets"
 import { Gun } from "./gun"
 import { Score } from "./score"
 import { Target } from "./targets"
+import { MusicEvents } from "./music-events"
 
 import { loadMIDIFile, loadMIDIFileThroughClient } from "./audio/midi/midi-file"
 
 import gsap from "gsap"
-import { MusicEvents } from "./music-events"
 import { useState } from "react"
 import useTimer from "./hooks/useTimer"
-import AudioTimer from "./timing/timer.audio"
 // import useKeyboard from "./hooks/useKeyboard"
 import {useKeyboard} from 'react-aria'
 import { Uploader } from "./uploader"
+import { DAW } from "./daw"
 
 // -----------------------------------------------------------------------------
 // Requires a user action so useEffect cannot be used here
@@ -108,10 +108,6 @@ const App = () => {
   const cameraRotation = [90, 0, 0]
   const cameraFieldOfView = 75
 
-  // starting position of the musicEventss
-  const trackPosition = [0, 0, -5]
-
-
   const uploadMIDIFile = async (file) => {
     const midiFile = await loadMIDIFileThroughClient( file, {}, (output)=>{
       console.info("midi file loaded", file, " raw:", output)
@@ -146,18 +142,6 @@ const App = () => {
     setStarted(true)
   }
 
-  // const {beat, timer} = useTimer( audioContext, (data)=>{
-  //     // initialCameraPosition[1] += 0.5
-
-  //     // setCameraPosition( (old)=>{
-  //     //   return [ old[0], old[1]+0.5, old[2] ] 
-  //     // })
-
-  //     // camera.position.y += 0.5
-
-  //     console.info("tick @"+tempo+" BPM", {data, camera}) 
-  // }, tempo )
-  
   return (
     <>
       <Canvas
@@ -167,12 +151,10 @@ const App = () => {
           height: "100vh",
         }}
       >
-        <color args={[0x808080]} attach={"background"}></color>
         <PerspectiveCamera makeDefault position={initialCameraPosition} angle={cameraRotation} fov={cameraFieldOfView} />
         <Environment preset="warehouse" />
-       
         { 
-          track !== null && audioContext !== null ? <MusicEvents audioContext={audioContext} track={track} position={trackPosition}/> : null
+          track !== null && audioContext !== null ?  <DAW audioContext={audioContext} track={track}/> : null
         }
 
         {/* <Bullets /> */}
@@ -185,10 +167,12 @@ const App = () => {
         </group> */}
         
         {/* <Score /> */}
+        
         <GsapTicker />
 
         <XR store={xrStore}></XR>
-
+        <color args={[0x808080]} attach={"background"}></color>
+       
       </Canvas>
 
       <div
