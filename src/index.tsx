@@ -204,7 +204,9 @@ const App = () => {
           fontFamily: "SpaceMono-Bold, sans-serif",
         }}
       >
-        <Uploader callback={uploadMIDIFile} />
+        <Uploader 
+          label="Drag and drop MIDI file here"
+          callback={uploadMIDIFile} />
 
         {/* <p>Tempo: {timer?.BPM}</p>
         <p>Beat: {beat?.bar}</p> */}

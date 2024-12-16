@@ -1,7 +1,7 @@
 import { ChangeEvent, useRef, useState } from "react"
 import React from "react"
 
-export function Uploader({ accept = "audio/midi", callback=()=>{} }: { accept?: string, fileCallback?: (file: File) => void }) {
+export function Uploader({ accept = "audio/midi", callback=()=>{}, label=null }: { accept?: string, callback?: (file: File) => void, label?:string})  {
   const [midiFile, setMIDIFile] = useState<File | null>(null)
   const [fileName, setFileName] = useState("Loading...")
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -56,10 +56,12 @@ export function Uploader({ accept = "audio/midi", callback=()=>{} }: { accept?: 
             left:"50%",
             top:"40%",
             transform:"translateX(-50%)"
-        }}>MIDI File loaded {fileName}</p>
+        }}>
+            MIDI File loaded {fileName}
+        </p>
           
         ) : (
-          <label htmlFor="file-input">Choose file or drag it here</label>
+          <label htmlFor="file-input">{ label ? label : (<>Choose file or drag it here</>)}</label>
         )}
         <input
           ref={fileInputRef}
