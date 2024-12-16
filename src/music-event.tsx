@@ -16,6 +16,9 @@
 import { useRef, forwardRef, useState } from 'react'
 import { Vector3 } from 'three'
 
+import { useDrag } from "@use-gesture/react"
+import { animated, useSpring } from "@react-spring/three"
+
 type TargetProps = {
     index: number,
     pitch:number,
@@ -36,9 +39,8 @@ export const MusicEventProxy = ({
     duration = 1,
     onInteraction = ()=>{}
 }: TargetProps, ref : React.Ref<any>) => {
-
+    
     const scaleFactor = 0.2
-    const randomNumber = Math.random() * 360
 
     const width = scaleFactor * (duration ?? 1) + 0.5
     const height = 10  * (velocity ?? 1)
@@ -46,39 +48,82 @@ export const MusicEventProxy = ({
 
     const x = startTime * scaleFactor + index
     const y = 3 * (1 + programNumber + height / 2) - 10
-    const z = -1 * 5
-
-    const [active, setActive] = useState(false)
-    const [hover, setHover] = useState(false)
-
+    const z = -1 * 5    
     // const y = velocity * scaleFactor + patch
     // const z = duration * scaleFactor * 5
 
+    const position = [ x, y, z]
+
+    // const randomNumber = Math.random() * 360
     // const color = `hsl(${randomNumber}, +  100%, 50%)`
-    const color = `hsl(${(pitch * 6)%360}, 100%, 50%)`
+    // const color = `hsl(${(pitch * 6)%360}, 100%, 50%)`
+
+    // Internal state
+    const [active, setActive] = useState(false)
+    const [color, setColor] = useState(`hsl(${(pitch * 6)%360}, 100%, 50%)`)
+    const [isHovering, setIsHovering] = useState(false)
+    const [isDragging, setIsDragging] = useState(false)
+    
+    const [spring, api] = useSpring(() => ({
+        scale: 1,
+        position: position,
+        rotation: [0, 0, 0],
+        config: { friction: 10 }
+    }))
+
+    
+    
+    /*
+    const bind = useDrag(({ active, movement: [x, y], timeStamp, event }) => {
+        
+        if (active) {
+            event.ray.intersectPlane(floorPlane, planeIntersectPoint);
+            setPos([planeIntersectPoint.x, 1.5, planeIntersectPoint.z]);
+            position = [planeIntersectPoint.x, 1.5, planeIntersectPoint.z]
+        }
+
+        setIsDragging(active);
+
+        api.start({
+            // position: active ? [x / aspect, -y / aspect, 0] : [0, 0, 0],
+            position: position,
+            scale: active ? 1.2 : 1,
+            rotation: [y / aspect, x / aspect, 0]
+        });
+        return timeStamp;
+
+    },
+    { delay: true }
+    )
+    */
 
     
     console.info(index, "MusicEvent", { x,y,z, width, height, depth, color, programNumber} )  
     // console.info(index, "MusicEvent", pitch, {width, height, depth, color, pitch, velocity, startTime, duration, position} ) 
                   
-    // TODO : Create this colour as a function of the pitch!
+    //  {...bind()}
     return (
-        <mesh 
+        <animated.mesh 
+            {...spring} 
+            castShadow 
             ref={ref} 
-            position={[ x, y, z]} 
+            position={position} 
             onClick={() => {
                 //setActive(!active)
                 console.info("MusicEvent CLICK", { index, pitch, velocity, programNumber, startTime, duration})
+                
                 onInteraction && onInteraction("click", { index, pitch, velocity, programNumber, startTime, duration})
             }}
             onPointerOver={() => {
-                // setHover(true)
+                // setIsHovering(true)
                 console.info("MusicEvent HOVER", {active,  pitch, velocity})
+                setColor(`hsl(${(pitch * 6)%360}, 100%, 75%)`)
                 onInteraction && onInteraction("hover", { index, pitch, velocity, programNumber, startTime, duration})
             }}
             onPointerOut={() => {
-                // setHover(false)
+                // setIsHovering(false)
                 console.info("MusicEvent UNHOVER", { index, pitch, velocity, programNumber, startTime, duration})
+                setColor(`hsl(${(pitch * 6)%360}, 100%, 50%)`)
                 onInteraction && onInteraction("unhover", { index, pitch, velocity, programNumber, startTime, duration})
             }}
         >
@@ -88,7 +133,7 @@ export const MusicEventProxy = ({
                 depth
             ]} />
             <meshStandardMaterial color={color} />
-        </mesh>)
+        </animated.mesh>)
 }
 
 export const MusicEvent = forwardRef(MusicEventProxy)
