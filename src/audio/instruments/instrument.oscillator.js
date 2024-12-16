@@ -6,7 +6,7 @@ const OSCILLATOR_TYPES = ["sine","square","triangle","sawtooth","custom"]
 const OPTIONS = {
 	
 	// The shape of the wave produced by the node. Valid values are 'sine', 'square', 'sawtooth', 'triangle' and 'custom'. The default is 'sine'.
-	shape:OSCILLATOR_TYPES[3],
+	shape:OSCILLATOR_TYPES[0],
 	
 	// A detuning value (in cents) which will offset the frequency by the given amount. Its default is 0.
 	detune:0,
@@ -56,6 +56,14 @@ export default class OscillatorInstrument extends Instrument{
 	
 	get audioNode(){
 		return this.gainNode
+	}
+
+	set shape(value){
+		this.oscillator.type = value
+	}
+
+	get shape(){
+		return this.oscillator.type
 	}
 
 	constructor( audioContext, options={} ){
