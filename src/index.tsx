@@ -6,10 +6,11 @@
  */
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
-import { Environment, Gltf, PerspectiveCamera, Stars } from "@react-three/drei"
+import { Environment, Gltf, Text, Text3D, PerspectiveCamera, Stars, Sky, Cloud, Clouds } from "@react-three/drei"
 import { XR, createXRStore } from "@react-three/xr"
 
 import ReactDOM from "react-dom/client"
+import { suspend } from 'suspend-react'
 
 import { Bullets } from "./bullets"
 import { Gun } from "./gun"
@@ -29,6 +30,7 @@ import { DAW } from "./daw"
 import { Wallpaper } from "./wallpaper"
 
 import "./index.css"
+import { MeshBasicMaterial, MeshLambertMaterial } from "three"
 
 // -----------------------------------------------------------------------------
 // Requires a user action so useEffect cannot be used here
@@ -96,6 +98,11 @@ const GsapTicker = () => {
   return null
 }
 
+
+const world = import('@pmndrs/assets/hdri/sky.exr')
+const fontInter = import('@pmndrs/assets/fonts/inter_regular.woff')
+const fontInterBold = import('@pmndrs/assets/fonts/inter_bold.json')
+
 const App = () => {
 
   const [started, setStarted] = useState(false)
@@ -103,13 +110,15 @@ const App = () => {
   const [audioContext, setAudioContext] = useState(null)
   // const keyboard = useKeyboard()
 
+  const DEFAULT_MIDI_FILE = "./assets/midi/Stories_100BPM_Gmin.mid"
+  // const DEFAULT_MIDI_FILE = "./assets/midi/midi_nyan-cat.mid"
   let active = false
   
-  const initialCameraPosition = [0, 1.6, 2]
+  const initialCameraPosition = [0, 0, 0]
   const [cameraPosition, setCameraPosition] = useState(initialCameraPosition)
 
   const cameraRotation = [90, 0, 0]
-  const cameraFieldOfView = 75
+  const cameraFieldOfView = 65
 
   const uploadMIDIFile = async (file) => {
     const midiFile = await loadMIDIFileThroughClient( file, {}, (output)=>{
@@ -120,7 +129,7 @@ const App = () => {
   
   const loadDefaultMIDIFile = async (options={}) => {
     // Load in a local MIDI file from a relative URI
-    const midiFile = await loadMIDIFile( "./assets/midi/midi_nyan-cat.mid", options, (values)=>{
+    const midiFile = await loadMIDIFile( DEFAULT_MIDI_FILE, options, (values)=>{
       // console.info("midi file loaded", options, {values} )
     } )
     setTrack(midiFile)
@@ -176,25 +185,35 @@ const App = () => {
         }}
       >
         <PerspectiveCamera makeDefault position={initialCameraPosition} angle={cameraRotation} fov={cameraFieldOfView} />
-        <Environment preset="warehouse" />
-        
         { 
           track !== null && audioContext !== null ? 
             <group>
               <DAW audioContext={audioContext} track={track}/>
-              <color args={[0x505050]} attach={"background"}></color>
+              <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
+              <color args={[0x101010]} attach={"background"}></color>
             </group>      
            : 
             <group>
+              <Text position={[-1,-1,-7]} font={suspend(fontInter).default}>Drag MIDI File here or click to select</Text>
+              <Text3D position={[-10,-1,-48]} font={suspend(fontInterBold).default}>XRDAW</Text3D>
               <Wallpaper count={50} />
-              <color args={[0x303030]} attach={"background"}></color>
+              {/* https://drei.docs.pmnd.rs/staging/environment preset="warehouse" */}
+           
+              <color args={[0x505050]} attach={"background"}></color>
             </group>
         }
-
-        <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
+     
+        <Clouds material={MeshBasicMaterial }>  
+          <Cloud opacity={0.2} segments={20} bounds={[5, 1, 1]} volume={6} color="orange" />
+          <Cloud opacity={0.2} seed={1} scale={2} volume={5} color="hotpink" fade={100} />
+        </Clouds>
+      
+        <Sky distance={450000} sunPosition={[0, 1, 0]} inclination={0} azimuth={0.25}/>
              
-        {/* <Bullets /> */}
+       <Environment files={suspend(world).default} />
         {/* <Gltf src="assets/actors/spacestation.glb" /> */}
+            
+        {/* <Bullets /> */}
 
         {/* <group rotation-x={-Math.PI / 8}>
           <Target targetIdx={0} />
@@ -218,7 +237,7 @@ const App = () => {
           flexDirection: "column",
           justifyContent: "space-between",
           alignItems: "center",
-          color: "white",
+          color: "black",
           fontFamily: "SpaceMono-Bold, sans-serif",
         }}
       >
