@@ -92,8 +92,16 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
                 console.info("NOTE ON", frequency,{type, data} )
                 break
 
+            // case "click":
+            case "down":
+                console.info("NOTE DOWN", frequency,{type, data} )
+                break
+
+            case "up":
+                console.info("NOTE UP", frequency,{type, data} )
+                break
+
            case "unhover":
-           case "click":
                 instrument.noteOff()
                 mixer.gain.value = 0
                 if (midiOut)

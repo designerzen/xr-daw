@@ -15,8 +15,8 @@
  */
 import { useRef, forwardRef, useState } from 'react'
 import { Vector3 } from 'three'
-
-import { useDrag } from "@use-gesture/react"
+import { useDrag } from '@use-gesture/react'
+// import { useSpring, animated } from '@react-spring/web'
 import { animated, useSpring } from "@react-spring/three"
 import { useThree } from '@react-three/fiber'
 
@@ -62,7 +62,7 @@ export const MusicEventProxy = ({
 
     // Internal state
     const [active, setActive] = useState(false)
-    const [color, setColor] = useState(`hsl(${(pitch * 6)%360}, 100%, 50%)`)
+    const [color, setColor] = useState(`hsl(${(pitch * 6)%360}, 100%, 60%)`)
     const [position, setPosition] = useState([ x, y, z])
     const [isHovering, setIsHovering] = useState(false)
     const [isDragging, setIsDragging] = useState(false)
@@ -77,7 +77,6 @@ export const MusicEventProxy = ({
         rotation: [0, 0, 0],
         config: { friction: 10 }
     }))
-    
     
     const bind = useDrag(({ active, movement: [x, y], timeStamp, event }) => {
         
@@ -113,10 +112,15 @@ export const MusicEventProxy = ({
             castShadow 
             ref={ref} 
             position={position} 
+            onPointerUp={()=>{
+                onInteraction && onInteraction("up", { index, pitch, velocity, programNumber, startTime, duration})
+            }}
+            onPointerDown={()=>{
+                onInteraction && onInteraction("down", { index, pitch, velocity, programNumber, startTime, duration})
+            }}
             onClick={() => {
                 //setActive(!active)
                 console.info("MusicEvent CLICK", { index, pitch, velocity, programNumber, startTime, duration})
-                
                 onInteraction && onInteraction("click", { index, pitch, velocity, programNumber, startTime, duration})
             }}
             onPointerOver={() => {
@@ -128,7 +132,7 @@ export const MusicEventProxy = ({
             onPointerOut={() => {
                 // setIsHovering(false)
                 console.info("MusicEvent UNHOVER", { index, pitch, velocity, programNumber, startTime, duration})
-                setColor(`hsl(${(pitch * 6)%360}, 100%, 50%)`)
+                setColor(`hsl(${(pitch * 6)%360}, 85%, 44%)`)
                 onInteraction && onInteraction("unhover", { index, pitch, velocity, programNumber, startTime, duration})
             }}
         >
