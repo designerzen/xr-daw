@@ -153,6 +153,7 @@ const decodeTracks = ( track, stream ) =>
 		}
 	}
 
+	const allInstrumentsUsed = []
 	// Now re-loop through all events and all use noteOffs to determine the duration of each note on...
 	if (track.duration > 0 )
 	{
@@ -181,6 +182,7 @@ const decodeTracks = ( track, stream ) =>
 
 				case "programChange":
 					activeInstrument = command.programNumber
+					allInstrumentsUsed.push(activeInstrument)
 					console.info("Instrument changed to", activeInstrument)
 					break
 			}
@@ -189,7 +191,7 @@ const decodeTracks = ( track, stream ) =>
 			command.percentStart = command.time ? command.time / track.duration : -1
 		})
 
-		console.info("MIDI File loaded with duration", track.duration, {activemusicalEvents} )
+		console.info("MIDI File loaded with duration", track.duration, {track, allInstrumentsUsed} )
 	}
 	return track
 }
