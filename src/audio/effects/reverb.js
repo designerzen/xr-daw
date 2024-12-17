@@ -119,8 +119,7 @@ export const randomReverb = async () =>{
 		return reverbs[ Math.ceil( (reverbs.length - 1) * Math.random() ) ]// : reverbs[0]
 	}catch(error){
 		throw Error("Random reverb failed to fetch list"+error)
-	}
-	
+	}	
 }
 
 export const createReverb = async ( 

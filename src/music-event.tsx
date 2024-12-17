@@ -18,6 +18,7 @@ import { Vector3 } from 'three'
 
 import { useDrag } from "@use-gesture/react"
 import { animated, useSpring } from "@react-spring/three"
+import { useThree } from '@react-three/fiber'
 
 type TargetProps = {
     index: number,
@@ -40,6 +41,8 @@ export const MusicEventProxy = ({
     onInteraction = ()=>{}
 }: TargetProps, ref : React.Ref<any>) => {
     
+    const { size, viewport } = useThree()
+
     const scaleFactor = 0.2
 
     const width = scaleFactor * (duration ?? 1) + 0.5
@@ -52,7 +55,6 @@ export const MusicEventProxy = ({
     // const y = velocity * scaleFactor + patch
     // const z = duration * scaleFactor * 5
 
-    const position = [ x, y, z]
 
     // const randomNumber = Math.random() * 360
     // const color = `hsl(${randomNumber}, +  100%, 50%)`
@@ -61,50 +63,53 @@ export const MusicEventProxy = ({
     // Internal state
     const [active, setActive] = useState(false)
     const [color, setColor] = useState(`hsl(${(pitch * 6)%360}, 100%, 50%)`)
+    const [position, setPosition] = useState([ x, y, z])
     const [isHovering, setIsHovering] = useState(false)
     const [isDragging, setIsDragging] = useState(false)
     
+    const aspect = size.width / viewport.width
+  
+    let planeIntersectPoint = new Vector3()
+
     const [spring, api] = useSpring(() => ({
         scale: 1,
         position: position,
         rotation: [0, 0, 0],
         config: { friction: 10 }
     }))
-
     
     
-    /*
     const bind = useDrag(({ active, movement: [x, y], timeStamp, event }) => {
         
-        if (active) {
-            event.ray.intersectPlane(floorPlane, planeIntersectPoint);
-            setPos([planeIntersectPoint.x, 1.5, planeIntersectPoint.z]);
-            position = [planeIntersectPoint.x, 1.5, planeIntersectPoint.z]
+        if (active) 
+        {
+            event.ray.intersectPlane(floorPlane, planeIntersectPoint)
+            setPosition([planeIntersectPoint.x, 1.5, planeIntersectPoint.z])
+            // position = [planeIntersectPoint.x, 1.5, planeIntersectPoint.z]
         }
 
-        setIsDragging(active);
+        setIsDragging(active)
 
         api.start({
             // position: active ? [x / aspect, -y / aspect, 0] : [0, 0, 0],
             position: position,
             scale: active ? 1.2 : 1,
             rotation: [y / aspect, x / aspect, 0]
-        });
-        return timeStamp;
-
+        })
+        return timeStamp
     },
     { delay: true }
     )
-    */
+    
 
     
     console.info(index, "MusicEvent", { x,y,z, width, height, depth, color, programNumber} )  
     // console.info(index, "MusicEvent", pitch, {width, height, depth, color, pitch, velocity, startTime, duration, position} ) 
                   
-    //  {...bind()}
+    // 
     return (
         <animated.mesh 
-            {...spring} 
+            {...spring}  {...bind()}
             castShadow 
             ref={ref} 
             position={position} 

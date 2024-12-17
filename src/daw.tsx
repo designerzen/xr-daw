@@ -18,12 +18,21 @@ export const DAW = ({track, audioContext}: TargetProps) => {
     const tempo = 90
 
     const {beat, timer} = useTimer( audioContext, (data)=>{ 
-        console.log("tick")
+        // console.log("tick")
+            // initialCameraPosition[1] += 0.5
+
+        // setCameraPosition( (old)=>{
+        //   return [ old[0], old[1]+0.5, old[2] ] 
+        // })
+
+        // camera.position.y += 5
+
     }, tempo )
 
     // TOCK
     useFrame(() => {
         const now = performance.now()
+        // console.log("tock")
         // console.log(now, "RENDER loop MusicEvents MIDI File", {track} )
     })
 

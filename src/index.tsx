@@ -20,7 +20,7 @@ import { MusicEvents } from "./music-events"
 import { loadMIDIFile, loadMIDIFileThroughClient } from "./audio/midi/midi-file"
 
 import gsap from "gsap"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import useTimer from "./hooks/useTimer"
 // import useKeyboard from "./hooks/useKeyboard"
 import {useKeyboard} from 'react-aria'
@@ -43,20 +43,20 @@ const createBackend = async () => {
 
   // -----------------------------------------------------------------------------
   // MIDI File options
-  const options = {}
+  // const options = {}
   // Load in the MIDI file from the file requester (or embed the file as base 64)
   // const midiFile = await loadMIDIFileThroughClient( file, {}, (output)=>{
   //   console.info("midi file loaded", file, " BPM", output)
   // } )
 
-  // Load in a local MIDI file from a relative URI
-  const midiFile = await loadMIDIFile( "./assets/midi/midi_nyan-cat.mid", options, (values)=>{
-    // console.info("midi file loaded", options, {values} )
-  } )
+  // // Load in a local MIDI file from a relative URI
+  // const midiFile = await loadMIDIFile( "./assets/midi/midi_nyan-cat.mid", options, (values)=>{
+  //   // console.info("midi file loaded", options, {values} )
+  // } )
 
-  console.info("Midi file loaded", midiFile)
+  // console.info("Midi file loaded", midiFile)
 
-  return { audioContext, midiFile }
+  return { audioContext }
 }
 
 
@@ -115,6 +115,14 @@ const App = () => {
     setTrack(midiFile)
   }
   
+  const loadDefaultMIDIFile = async (options={}) => {
+    // Load in a local MIDI file from a relative URI
+    const midiFile = await loadMIDIFile( "./assets/midi/midi_nyan-cat.mid", options, (values)=>{
+      // console.info("midi file loaded", options, {values} )
+    } )
+    setTrack(midiFile)
+  }
+
   // Create the front and backends
   const createClient = async() => {
 
@@ -123,24 +131,37 @@ const App = () => {
       return
     }
 
-    const results = await createBackend()
-  
-    setAudioContext(results.audioContext)
-
-    // if track was already set from the 
     if (!track)
     {
       console.info("Using default MIDI track")
-      setTrack(results.midiFile)
-    }else{
-      console.info("Used custom track")
+      return await loadDefaultMIDIFile()
     }
-     
-    console.info("createClient", results)
-    xrStore.enterVR()
+      
+    // Create our audio pipelines
+    const context = new AudioContext()
+    
+    if (context.state === 'suspended') {
+      context.resume()
+    }
 
+    // console.info("create Client")
+    xrStore.enterVR()
+    setAudioContext(context)
     setStarted(true)
   }
+
+  useEffect(() => {
+    if (track)
+    {
+      createClient()
+      console.info("useEffect")
+    }else{
+      console.info("useEffect - ignored")
+    }
+    return ()=>{
+      // clean up
+    }
+  }, [track])
 
   return (
     <>
@@ -189,7 +210,7 @@ const App = () => {
         }}
       >
         <Uploader 
-          label="Drag and drop MIDI file here"
+          label="Drag and drop MIDI file here or press to load one from your device"
           callback={uploadMIDIFile} />
 
         {/* <p>Tempo: {timer?.BPM}</p>
@@ -198,7 +219,7 @@ const App = () => {
 
         { !started && 
                 <button
-                  onClick={() => createClient()}
+                  onClick={() => loadDefaultMIDIFile()}
                   style={{
                     position: "fixed",
                     bottom: "20px",
@@ -207,7 +228,7 @@ const App = () => {
                     zIndex:"303"
                   }}
                 >
-                  Start
+                  Start with preset song
                 </button>
         }
 

@@ -19,6 +19,7 @@ import useTimer from "./hooks/useTimer"
 import { noteNumberToFrequency } from "./audio/tuning/frequencies"
 import OscillatorInstrument from "./audio/instruments/instrument.oscillator"
 import { WebMidi } from "webmidi"
+import { createReverb } from "./audio/effects/reverb"
 
 type TargetProps = {
     track:MidiTrack,
@@ -39,10 +40,20 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
     let midiOut = null
 
     const instrument = new OscillatorInstrument( audioContext )
-    const mixer = audioContext.createGain()	
+    instrument.volume = 0.1
+
+    const mixer = audioContext.createGain()	 
     mixer.gain.value = 0
-    instrument.output.connect( mixer )
-	mixer.connect( audioContext.destination )
+    
+    // const reverb = createReverb(audioContext, 0.1, false, "./assets/audio/acoustics/emt_140_dark_5.wav").then( reverb => {
+    const reverb = createReverb(audioContext, 0.1, true, "./assets/audio/acoustics/ir-hall.mp3").then( reverb => {
+        instrument.output.connect( mixer )
+        mixer.connect( reverb.node )
+        reverb.node.connect( audioContext.destination  )
+        // reverb.node.connect( mixer )
+        // mixer.connect( audioContext.destination )
+    })
+
     // instrument.noteOn( 0 )
     // instrument.noteOff()
 
@@ -73,7 +84,7 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
        {
            case "hover":
                 instrument.noteOn( data.pitch, data.velocity )
-                mixer.gain.value = 1
+                mixer.gain.value = 0.8
                 if (midiOut)
                 {
                     midiOut.playNote(data.pitch, { velocity:data.velocity, duration:data.duration})
@@ -93,20 +104,7 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
                 break
        }
     }
-        
-    const {beat, timer} = useTimer( audioContext, (data)=>{
-        // initialCameraPosition[1] += 0.5
 
-        // setCameraPosition( (old)=>{
-        //   return [ old[0], old[1]+0.5, old[2] ] 
-        // })
-
-        // camera.position.y += 5
-
-        // position[1] += 1
-
-        // console.info("tick @"+tempo+" camera", camera.position.y, {data, camera}) 
-    }, tempo )
 
     // const [progress, setProgress] = useState(0)
 
