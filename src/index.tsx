@@ -6,7 +6,7 @@
  */
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
-import { Environment, Gltf, PerspectiveCamera } from "@react-three/drei"
+import { Environment, Gltf, PerspectiveCamera, Stars } from "@react-three/drei"
 import { XR, createXRStore } from "@react-three/xr"
 
 import ReactDOM from "react-dom/client"
@@ -26,6 +26,9 @@ import useTimer from "./hooks/useTimer"
 import {useKeyboard} from 'react-aria'
 import { Uploader } from "./uploader"
 import { DAW } from "./daw"
+import { Wallpaper } from "./wallpaper"
+
+import "./index.css"
 
 // -----------------------------------------------------------------------------
 // Requires a user action so useEffect cannot be used here
@@ -174,10 +177,22 @@ const App = () => {
       >
         <PerspectiveCamera makeDefault position={initialCameraPosition} angle={cameraRotation} fov={cameraFieldOfView} />
         <Environment preset="warehouse" />
+        
         { 
-          track !== null && audioContext !== null ?  <DAW audioContext={audioContext} track={track}/> : null
+          track !== null && audioContext !== null ? 
+            <group>
+              <DAW audioContext={audioContext} track={track}/>
+              <color args={[0x505050]} attach={"background"}></color>
+            </group>      
+           : 
+            <group>
+              <Wallpaper count={50} />
+              <color args={[0x303030]} attach={"background"}></color>
+            </group>
         }
 
+        <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
+             
         {/* <Bullets /> */}
         {/* <Gltf src="assets/actors/spacestation.glb" /> */}
 
@@ -188,15 +203,13 @@ const App = () => {
         </group> */}
         
         {/* <Score /> */}
-        
+      
         <GsapTicker />
-
         <XR store={xrStore}></XR>
-        <color args={[0x808080]} attach={"background"}></color>
-       
       </Canvas>
 
       <div
+        className="overlay"
         style={{
           position: "fixed",
           display: "flex",
@@ -219,12 +232,12 @@ const App = () => {
 
         { !started && 
                 <button
+                  className="button-start"
                   onClick={() => loadDefaultMIDIFile()}
                   style={{
                     position: "fixed",
                     bottom: "20px",
                     left: "20px",
-                    fontSize: "20px",
                     zIndex:"303"
                   }}
                 >
