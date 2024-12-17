@@ -9,7 +9,7 @@ module.exports = {
     path: path.resolve(__dirname, "dist"),
   },
   resolve: {
-    extensions: [".ts", ".tsx", ".js"],
+    extensions: [".ts", ".tsx", ".js", ".css"],
   },
   module: {
     rules: [
@@ -18,7 +18,12 @@ module.exports = {
         use: "babel-loader",
         exclude: /node_modules/,
       },
+      {
+        test: /\.css$/i,
+        use: ["style-loader", "css-loader"],
+      },
     ],
+
   },
   devServer: {
     static: {
@@ -27,7 +32,8 @@ module.exports = {
     host: "0.0.0.0",
     server: "https",
     compress: true,
-    port: 8081,
+    // :8081
+    port:8081,
     client: {
       overlay: { warnings: false, errors: true },
     },
