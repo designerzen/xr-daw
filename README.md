@@ -1,10 +1,11 @@
 # xr-daw
 immersive extended reaity DAW
 
+Winner of Most Innovative App at MuseHub 2024
+
 Test with MIDI files from [https://bitmidi.com/]
 Test ONLINE at [https://designerzen.github.io/xr-daw/]
 
-Based on [React Three XR](https://pmndrs.github.io/xr/docs/)
 
 ## Setting Up Your Local Development Environment
 
@@ -84,8 +85,8 @@ If you're already using the [Immersive Web Emulator browser extension](https://c
 Here’s a showcase of the emulation setup in action:
 
 <figure style="text-align: center;">
-  <img src="./tutorial/assets/iwerdevui.gif" style="max-height:376px"/>
-  <figcaption>IWER & IWER/DevUI Showcase</figcaption>
+  <img src="./screenshot.webp" style="max-height:376px"/>
+  <figcaption>XR DAW screenshots</figcaption>
 </figure>
 
 
