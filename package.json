@@ -4,7 +4,8 @@
   "scripts": {
     "WEBPACK": "--------------------------------",
     "build": "webpack --mode production",
-    "dev": "webpack serve --mode development",
+    "dev": "webpack serve --mode development --env dev",
+    "start": "npm run dev",
     "VITE": "--------------------------------",
     "bundle": "vite build",
     "serve": "vite serve src/ --host",
@@ -16,7 +17,7 @@
   "license": "MIT",
   "dependencies": {
     "@pmndrs/assets": "^1.7.0",
-    "@react-three/drei": "^9.120.4",
+    "@react-three/drei": "^9.120.5",
     "@react-three/fiber": "^8.17.10",
     "@react-three/xr": "^6.4.12",
     "@use-gesture/react": "^10.3.1",
@@ -28,7 +29,7 @@
     "react-dom": "^18.3.1",
     "react-spring": "^9.7.5",
     "save": "^2.9.0",
-    "three": "^0.171.0",
+    "three": "^0.172.0",
     "webmidi": "^3.1.12",
     "zustand": "^5.0.2"
   },
@@ -47,11 +48,11 @@
     "prettier": "^3.4.2",
     "style-loader": "^4.0.0",
     "typescript": "^5.7.2",
-    "vite": "^6.0.3",
+    "vite": "^6.0.6",
     "vite-plugin-html": "^3.2.2",
     "vite-plugin-static-copy": "^2.2.0",
     "webpack": "^5.97.1",
-    "webpack-cli": "^5.1.4",
+    "webpack-cli": "^6.0.1",
     "webpack-dev-server": "^5.2.0"
   }
 }
