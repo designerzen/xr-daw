@@ -175,7 +175,8 @@ const decodeTracks = ( track, stream ) =>
 					{
 						// note off time - note on time
 						note.duration = command.time - note.time
-						command.percentDuration = note.duration / track.duration
+						note.percentDuration = command.percentDuration = note.duration / track.duration
+						
 						activemusicalEvents.delete(command.noteNumber)
 					}
 					break
