@@ -3,8 +3,22 @@ html, body{
     font-family: "SpaceMono-Bold, sans-serif";
 }
 
-button{
+.button-start{
     font-size: "20px";
+    font-weight: 900;
+    appearance: none;
+    border:2px solid pink;
+    border-radius: 9px;
+    color: white;
+    background-color:black;
+    padding:1rem 2rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+}
+.button-start:is(:hover, :active, :focus){
+    background-color: white;
+    color:black;
 }
 
 .overlay{

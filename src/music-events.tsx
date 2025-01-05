@@ -8,18 +8,18 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { MusicEvent } from "./music-event"
 import { useFrame, useThree } from "@react-three/fiber"
+import useTimer from "./hooks/useTimer"
 
-import AudioTimer from "./timing/timer.audio"
+// import AudioTimer from "./timing/timer.audio"
 import MidiTrack from "./audio/midi/midi-track"
 import { Text } from "@react-three/drei"
-import useTimer from "./hooks/useTimer"
 import { noteNumberToFrequency } from "./audio/tuning/frequencies"
-import OscillatorInstrument from "./audio/instruments/instrument.oscillator"
-import { WebMidi } from "webmidi"
-import { createReverb } from "./audio/effects/reverb"
+import { Waveform } from "./waveform"
+
+import { createAudioComponents } from "./services/audiobus"
 
 type TargetProps = {
     track:MidiTrack,
@@ -28,63 +28,32 @@ type TargetProps = {
 }
 
 export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetProps) => {
-    
-    if (!audioContext)
-    {
-        return (<></>)
-    }
 
+    const componentIsMounted = useRef<Boolean>(true)
     const musicEventsRef = useRef<Group>(null)
+    // const audioBus = useRef<AudioBus>(null)
+    const [audio, setAudio] = useState(null)
+    const [waveformData, setWaveformData] = useState(null)
     const camera = useThree(state => state.camera)
 
-    let midiOut = null
-
-    const instrument = new OscillatorInstrument( audioContext )
-    instrument.volume = 0.1
-
-    const mixer = audioContext.createGain()	 
-    mixer.gain.value = 0
-    
-    // const reverb = createReverb(audioContext, 0.1, false, "./assets/audio/acoustics/emt_140_dark_5.wav").then( reverb => {
-    const reverb = createReverb(audioContext, 0.1, true, "./assets/audio/acoustics/ir-hall.mp3").then( reverb => {
-        instrument.output.connect( mixer )
-        mixer.connect( reverb.node )
-        reverb.node.connect( audioContext.destination  )
-        // reverb.node.connect( mixer )
-        // mixer.connect( audioContext.destination )
-    })
-
-    // instrument.noteOn( 0 )
-    // instrument.noteOff()
-
-    WebMidi
-        .enable()
-        .then(onEnabled)
-        .catch(err => alert(err));
-    
-    function onEnabled() {
-        
-        // Inputs
-        // WebMidi.inputs.forEach(input => console.log(input.manufacturer, input.name));
-        
-        // Outputs
-        WebMidi.outputs.forEach(output => {
-            console.log(output.manufacturer, output.name)
-            midiOut = output
-         })
-    }
-
-    let tempo = 90
-
+    //const {midiOut, mixer, instrument, reverb} = await createAudioComponents(audioContext) 
     const onInteraction = (type, data) => {
        
+        if (!audio)
+        {
+            console.error("MusicEvents NO Audio Bus", {audio, type, data} )
+            return
+        }
+
         const frequency = noteNumberToFrequency( data.pitch )
-       // oscillator.frequency.value = Math.random() * 1000
-       switch( type)
+        const {instrument, mixer, envelope, midiOut} = audio
+      
+        switch( type)
        {
            case "hover":
                 instrument.noteOn( data.pitch, data.velocity )
                 mixer.gain.value = 0.8
+                envelope.on()
                 if (midiOut)
                 {
                     midiOut.playNote(data.pitch, { velocity:data.velocity, duration:data.duration})
@@ -103,7 +72,8 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
 
            case "unhover":
                 instrument.noteOff()
-                mixer.gain.value = 0
+                // mixer.gain.value = 0
+                envelope.off()
                 if (midiOut)
                 {
                     midiOut.stopNote(data.pitch)
@@ -113,9 +83,48 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
        }
     }
 
+    useEffect(() => {
+        return () => {
+          componentIsMounted.current = false
+        }
+    }, [])
+    
 
-    // const [progress, setProgress] = useState(0)
+    useEffect(() => {
+    
+        const createAudioBus = async () => {
+            const audioConnections = await createAudioComponents(audioContext) 
+            // if the componnet was unmounted before the async completed
+            if (componentIsMounted.current)
+            {
+                // set the state
+                setAudio(audioConnections)
+               
+                const waveformAudioBuffer = audioConnections.reverb.audioBuffer
+                setWaveformData(waveformAudioBuffer)
+                console.log("createAudioBus useEffect", { audioConnections, waveformAudioBuffer } )
+            }else{
+                console.error("UNMOUNTED createAudioBus useEffect", { audioConnections} )
+            }
+        }
+        createAudioBus()
+        
+        //console.log("MusicEvents useEffect", {track} )
+        
+        return () => {
+            // audio.destroy()
+            setAudio(null)
+            console.log("MusicEvents useEffect cleanup", {track} )
+        }
+    }, [track])
 
+    // TOCK
+    useFrame(() => {
+        const now = performance.now()
+        // console.log(now, "RENDER loop MusicEvents MIDI File", {track} )
+    })
+
+    // let tempo = 90
     // const {beat, timer} = useTimer( audioContext, ()=>{}, 90 )
 
     // clock.setCallback( values =>{
@@ -130,54 +139,75 @@ export const MusicEvents = ({ track, audioContext, position=[0,0,0] }: TargetPro
         
     // // Timing options
     // clock.startTimer()
-
-   // MIDI Track has not loaded yet! 
-    if (!track || !track.noteOnCommands)
+    
+    if (!audioContext)
     {
-        console.error("MusicEvents NO MIDI File", track )
         return <Text
                     color={0xffa276}
-                    font="assets/SpaceMono-Bold.ttf"
+                    font="assets/fonts/SpaceMono-Bold.ttf"
                     fontSize={0.52}
                     anchorX="center"
                     anchorY="middle"
                     position={[0, 0.67, -1.44]}
                     quaternion={[-0.4582265217274104, 0, 0, 0.8888354486549235]}
                 >
-                    NO MIDI File
+                    AudioContext was not provided
+                </Text>
+    }
+    
+    // Audio Bus and connections are not loaded yet...
+    if ( !audio )
+    {
+        //console.error("MusicEvents NO Audio Connections", audio )
+        return <Text
+                    color={0xffa276}
+                    font="assets/fonts/SpaceMono-Bold.ttf"
+                    fontSize={0.52}
+                    anchorX="center"
+                    anchorY="middle"
+                    position={[0, 0.67, -1.44]}
+                    quaternion={[-0.4582265217274104, 0, 0, 0.8888354486549235]}
+                >
+                    Loading Audio Bus
                 </Text>
     }
 
-    // TOCK
-    useFrame(() => {
-        const now = performance.now()
-        // console.log(now, "RENDER loop MusicEvents MIDI File", {track} )
-    })
+    // MIDI Track has not loaded yet! 
+    if (!track || !track.noteOnCommands)
+    {
+        //console.error("MusicEvents NO MIDI File", track )
+        return <Text
+                    color={0xffa276}
+                    font="assets/fonts/SpaceMono-Bold.ttf"
+                    fontSize={0.52}
+                    anchorX="center"
+                    anchorY="middle"
+                    position={[0, 0.67, -1.44]}
+                    quaternion={[-0.4582265217274104, 0, 0, 0.8888354486549235]}
+                >
+                    NO MIDI File Data available
+                </Text>
+    }
 
     // MIDI Track has populated
-    return (
-        <group ref={musicEventsRef} position={position}>
-            {
-                track.noteOnCommands.map((command, index) => {
-                     return <MusicEvent
-                                index={index}
-                                key={command.id} 
-                                programNumber={command.programNumber}
-                                pitch={command.noteNumber} 
-                                velocity={command.velocity}  
-                                startTime={command.percentStart} 
-                                duration={command.percentDuration} 
-                                onInteraction={onInteraction} 
-                            />
-                    //  return <MusicEvent
-                    //             index={index}
-                    //             key={command.id} 
-                    //             pitch={command.noteNumber} 
-                    //             velocity={command.velocity} 
-                    //             startTime={command.startTime} 
-                    //             duration={command.duration} 
-                    //         />
-                })
-            }
-        </group>)
+    return (<>
+            <Waveform audioContext={audioContext} audioBuffer={waveformData} />
+            
+            <group ref={musicEventsRef} position={position}>
+                {
+                    track.noteOnCommands.map((command, index) => {
+                        return <MusicEvent
+                                    index={index}
+                                    key={command.id} 
+                                    programNumber={command.programNumber}
+                                    pitch={command.noteNumber} 
+                                    velocity={command.velocity}  
+                                    startTime={command.percentStart} 
+                                    duration={command.percentDuration} 
+                                    onInteraction={onInteraction} 
+                                />
+                    })
+                }
+            </group>
+        </>)
 }

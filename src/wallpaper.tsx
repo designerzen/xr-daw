@@ -61,4 +61,3 @@ export function Wallpaper({ count }: { count: number }) {
     </>
   )
 }
-

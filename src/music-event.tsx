@@ -27,7 +27,7 @@ type TargetProps = {
     startTime:number,
     programNumber:number,
     duration:number,
-    color:number|string,
+    // color:number|string,
     onInteraction:Function
 }
 
@@ -43,15 +43,15 @@ export const MusicEventProxy = ({
     
     const { size, viewport } = useThree()
 
-    const scaleFactor = 0.2
+    const scaleFactor = 10
 
     const width = scaleFactor * (duration ?? 1) + 0.5
     const height = 10  * (velocity ?? 1)
-    const depth = 10 //* (velocity ?? 1)
+    const depth = 10 + pitch//* (velocity ?? 1)
 
     const x = startTime * scaleFactor + index
-    const y = 3 * (1 + programNumber + height / 2) - 10
-    const z = -1 * 5    
+    const y = 2 * ( (programNumber) + height / 2) //- 10
+    const z = -10 - depth / 2
     // const y = velocity * scaleFactor + patch
     // const z = duration * scaleFactor * 5
 
@@ -99,16 +99,14 @@ export const MusicEventProxy = ({
     },
     { delay: true }
     )
-    
 
-    
-    console.info(index, "MusicEvent", { x,y,z, width, height, depth, color, programNumber} )  
+    console.info(index, "🎵 Event", {startTime,duration}, { x,y,z, width, height, depth, color, programNumber} )  
     // console.info(index, "MusicEvent", pitch, {width, height, depth, color, pitch, velocity, startTime, duration, position} ) 
                   
-    // 
     return (
         <animated.mesh 
-            {...spring}  {...bind()}
+            {...spring}  
+            {...bind()}
             castShadow 
             ref={ref} 
             position={position} 
