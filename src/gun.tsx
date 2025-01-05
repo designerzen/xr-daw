@@ -44,7 +44,7 @@ export const Gun = () => {
   return (
     <>
       <primitive object={scene} />
-      <PositionalAudio ref={soundRef} url="assets/laser.ogg" loop={false} />
+      <PositionalAudio ref={soundRef} url="assets/audio/laser.ogg" loop={false} />
     </>
   )
 }
