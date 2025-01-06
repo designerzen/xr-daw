@@ -72,12 +72,11 @@ export function buildWavBlob(sampleChannels, sampleRate = 44100) {
 }
 
 /**
- * 
+ * Inspired by https://gist.github.com/tatsuyasusukida/b6daa0cd09bba2fbbf6289c58777eeca?permalink_comment_id=5223299
  * @param {AudioBuffer|Array} buffers 
  * @param {Object} settings 
  * @returns 
  */
-// https://gist.github.com/tatsuyasusukida/b6daa0cd09bba2fbbf6289c58777eeca?permalink_comment_id=5223299
 export const encodeAudioBufferIntoWav = (buffers, settings = {
     sampleRate:44100,
     stereo:true,
@@ -111,8 +110,6 @@ export const encodeAudioBufferIntoWav = (buffers, settings = {
     }else{
         // assuming an array of floats...
     }
-
-debugger
 
     // add up all space in the array
     const sampleCount = buffers.reduce((memo, buffer) => memo + buffer.length, 0)

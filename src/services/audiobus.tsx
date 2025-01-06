@@ -49,9 +49,11 @@ export const createAudioComponents = async(audioContext:AudioContext) => {
         decay:0.1, 
         sustain:0.8,
         release:0.5,
+
         // booleans
         normalize : true,
         reverse:false,
+        stereo:false,
 
         // noise:'white' 
         // noise:'pink'  
@@ -82,10 +84,10 @@ export const createAudioComponents = async(audioContext:AudioContext) => {
     }
 
     const buffer = reverb.audioBuffer
-    const blob = encodeAudioBufferIntoWav(buffer, encodeOptions)
-    // force download...
-    downloadBlobOnClient( blob )
-    // draw to canvas
+    // const blob = encodeAudioBufferIntoWav(buffer, encodeOptions)
+    // // force download...
+    // downloadBlobOnClient( blob )
+    // // draw to canvas
 
 
 
