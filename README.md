@@ -1,130 +1,89 @@
-# xr-daw
-immersive extended reaity DAW
+# XR DAW
 
-Winner of Most Innovative App at MuseHub 2024
+A browser-based spatial MIDI sequencer built with **TypeScript, Meta Immersive Web SDK (IWSDK), Three.js, and Web Audio**. The application has no React components or React rendering layer.
 
-Test with MIDI files from [https://bitmidi.com/]
-Test ONLINE at [https://designerzen.github.io/xr-daw/]
+Original project: winner of Most Innovative App at MuseHub 2024.
 
+## Run
 
-## Setting Up Your Local Development Environment
+Use Node.js 22.12+ (Node 24 LTS recommended).
 
-To prepare your development environment and get started with building your WebXR experience, follow the steps below:
-
-1. **Clone this repository**:
-
-   ```bash
-   gh repo clone designerzen/xr-daw
-   cd xr-daw
-   ```
-
-2. **Verify that you have Node.js and npm installed**:
-
-   - Node.js version: `20.x` or later
-   - npm version: `10.x` or later
-     You can check your versions with these commands:
-
-   ```bash
-   node -v
-   npm -v
-   ```
-
-3. **Install dependencies**:
-
-   ```bash
-   npm install
-   ```
-
-4. **Run the local development server**:
-
-   ```bash
-   npm run dev
-   ```
-
-   After running the above command, your development server will be available at `localhost:8081`.
-
-### Developing with a Headset
-
-You can access the local development server from your XR headset by using one of two methods: via the IP address of your computer or by using ADB with port forwarding.
-
-#### Accessing the Local Server on Your Headset via IP Address
-
-On most home networks, you can access the local server by entering your computer's IP address and the port number (8081) in the browser on your VR headset. This information is displayed in the Webpack console when you start the server.
-
-For example:
-
-```bash
-<i> [webpack-dev-server] Project is running at:
-<i> [webpack-dev-server] On Your Network (IPv4): https://192.168.0.123:8081/
+```sh
+npm ci
+npm run dev
 ```
 
-You might encounter a warning about an invalid certificate when accessing the site from your browser client, which you can safely dismiss to access your site.
+Open `https://localhost:8081/`. IWSDK uses a self-signed development certificate, so a browser may ask you to accept it. Its managed development browser and IWER (the desktop XR emulator) are available for testing without a headset; Chromium is downloaded on first use. Production builds do not include the emulator.
 
-#### Accessing the Local Server on Your Headset via ADB
+On a headset, open the HTTPS network URL printed by Vite. Alternatively, connect a Quest by USB and use `adb reverse tcp:8081 tcp:8081`, then open `https://localhost:8081/` on the headset. The app starts in desktop mode; **Enter VR** requests an immersive session directly from your click.
 
-If accessing via IP address doesn’t work due to network restrictions or firewall settings, you can use **ADB (Android Debug Bridge)** and port forwarding:
+## What works
 
-1. **Connect your headset to your computer**: Use a USB cable and enable developer mode on your headset. Check your device's official documentation for instructions on enabling developer mode.
-2. **Set up port forwarding**: Open Chrome on your computer and navigate to `chrome://inspect/#devices`. Your headset should appear under **Remote Target**.
+- MIDI type 0/1 import, including simultaneous tracks and tempo changes.
+- Four-bar piano-roll pages, track selection, and octave navigation.
+- Mouse or controller/hand-ray note dragging, snapped to sixteenths.
+- Add/delete notes, edit duration and velocity, audition, undo and redo.
+- Polyphonic triangle synthesis, play/pause/stop, play from the visible page, and project looping.
+- Track gain/mute, tempo scaling, IndexedDB autosave, downloadable JSON projects, and stereo PCM WAV export.
+- A world-space UIKitML transport/editor panel in VR.
 
-3. **Configure port forwarding**:
-   - Click **Port forwarding...** in Chrome DevTools.
-   - Add a rule to forward port `8081` from your computer to your headset.
+Select a note, then use arrow keys to change time/pitch. Shift + left/right changes duration; Shift + up/down transposes an octave. Delete removes a selected note. Space toggles playback; Ctrl/Cmd + Z undoes, and Shift + Ctrl/Cmd + Z redoes. Keyboard shortcuts are inactive while a form control has focus.
 
-You can now access the local server on your headset by entering `https://localhost:8081` in the browser. As with the IP address method, you may encounter a certificate warning, which can be dismissed.
+Autosave stores the most recent project in this browser on this device. Download a project to keep a portable copy. Opening another project replaces the current session. WAV export renders the built-in synth and respects track gain/mute.
 
-### Developing with an Emulator
+## Architecture
 
-This project includes a built-in emulation setup as part of `@react-three/xr`, powered by [IWER](https://github.com/meta-quest/immersive-web-emulation-runtime/) (Immersive Web Emulation Runtime) and [@iwer/devui](https://github.com/meta-quest/immersive-web-emulation-runtime/tree/main/devui). When developing on `localhost`, the emulation setup automatically detects native WebXR support in your browser and activates itself if no native WebXR support is found.
+- `src/app/project.ts`: versioned musical model, tick/second tempo conversion, validation, edit history.
+- `src/app/midi.ts`: MIDI adapter using `midi-file`; each track maintains its own absolute tick position.
+- `src/app/audio.ts`: framework-independent audio graph, worker-driven lookahead scheduler, offline WAV rendering.
+- `src/app/session.ts`: shared editing/transport commands and viewport state.
+- `src/app/sequencer-system.ts`: IWSDK entities, ray interactions, drag commits, and timeline presentation.
+- `src/app/main.ts`: plain HTML desktop controls and app lifecycle.
+- `public/ui/transport.uikitml`: spatial controls. `iwsdk.config.json` configures the world and manifest.
 
-If you're already using the [Immersive Web Emulator browser extension](https://chromewebstore.google.com/detail/immersive-web-emulator/cgffilbpcibhmcfbgggfhfolhkfbhmik), please disable it temporarily because the built-in emulation will conflict with it.
+Musical times use ticks with an explicit PPQ. Mesh coordinates are derived from the project; dragging commits one edit on release. Audio uses `AudioContext.currentTime` and native audio nodes rather than the rendering loop. Custom DSP can be added behind this engine interface using AudioWorklet/WASM when needed.
 
-- **IWER** is a full WebXR runtime, and **@iwer/devui** provides a developer interface that exposes control over the emulated XR device created by IWER. With this setup, you can manipulate headset and controller transforms, and simulate input events for the emulated controllers.
-- Additionally, you can leverage the **"Play Mode"** button on the top bar of the interface. This feature locks your cursor and allows you to control the emulated XR device like a first-person 3D experience on a PC.
+IWSDK and its Three.js alias are pinned together. IWSDK uses some libraries with transitive React dependencies, and IWER's development UI uses React internally; app code does not depend on React or React Three Fiber.
 
-Here’s a showcase of the emulation setup in action:
+The previous React prototype and existing audio/MIDI experiments remain in `src/` for reference, including in-progress changes. They are excluded from the new entry point and TypeScript build. The active app is entirely under `src/app/`. Existing synth/effect experiments have not been silently substituted into the new engine.
 
-<figure style="text-align: center;">
-  <img src="./screenshot.webp" style="max-height:376px"/>
-  <figcaption>XR DAW screenshots</figcaption>
-</figure>
+## Checks
 
-
-## Build and Deploy
-
-Once you've completed the development of your WebXR game, you can build and deploy it for others to experience. Here's how you can do that:
-
-### Deploying the App with GitHub Pages
-
-This repository includes a ready-to-use GitHub Actions workflow located at `.github/workflows/deploy.yml`, which automates both the build and deployment to GitHub Pages. Once enabled, every time you push changes to the `main` branch, a new build will automatically be deployed.
-
-#### Steps to Enable GitHub Pages Deployment:
-
-1. **Fork this repository** to your own GitHub account.
-2. Navigate to your forked repository’s **Settings**.
-3. Scroll down to the **Pages** section.
-4. Under **Build and Deployment**, change the **Source** to **GitHub Actions**.
-
-Once this is set, GitHub Actions will handle the build and deployment process automatically. Any time you push changes to the `main` branch, the app will be built and deployed to GitHub Pages without any additional manual steps.
-
-You can monitor the status of the deployment job or manually re-run it via the **Actions** tab in your GitHub repository.
-
-### Deploying to Your Own Hosting Solution
-
-If you prefer to host the app yourself, you’ll need to manually build the app and then deploy the generated files to your hosting provider.
-
-To generate the build, run the following command:
-
-```bash
+```sh
+npm test
 npm run build
+npm run serve
 ```
 
-This will create a `dist` folder containing the static files for the app. You can then upload these files to your hosting platform of choice.
+The build runs TypeScript checking before Vite. Tests cover tempo maps, MIDI tracks/overlaps, every bundled MIDI preset, history/validation, audio lookahead/seek/cancellation, and WAV encoding.
 
-## Contributing
+For a live desktop smoke test, enable IWSDK's local browser automation when starting development. In PowerShell:
 
-Please read [CONTRIBUTING.md](./CONTRIBUTING.md) for details on how to contribute to the project.
+```powershell
+$env:IWSDK_DEV_HEADLESS = 'true'
+$env:IWSDK_DEV_ALLOW_BROWSER_AUTOMATION = 'true'
+npm run dev
+```
+
+In another terminal:
+
+```sh
+npx @iwsdk/cli browser run tests/browser-smoke.mjs --timeout 110000
+npx @iwsdk/cli browser run tests/xr-enter.mjs
+npx @iwsdk/cli xr status
+npx @iwsdk/cli dev down
+```
+
+The smoke test exercises real mouse editing, undo/redo, playback, autosave/reload, preset import, project download, and WAV export. It writes temporary evidence under ignored `artifacts/`. Use IWSDK's XR tools to verify controller interactions in an active emulated session; a desktop screenshot alone does not verify VR input.
+
+## Current limits
+
+This is the first functional migration, not a complete recording DAW. All tracks currently use the same triangle synth. MIDI programs, sustain/controller events, percussion kits, and time-signature changes are not interpreted; bar labels use 4/4. SMPTE and independent type-2 MIDI sequences are rejected explicitly. WAV export is limited to ten minutes. Audio recording, external MIDI devices, plugin hosting, automation lanes, sample clips, and audio asset persistence are future engine features.
+
+Only the selected track, four bars, and a 36-semitone range are rendered. Very dense MIDI pages still use individual editable meshes and need instancing/profiling before large sessions. Headset performance, physical hand/controller ergonomics, audio latency, and browser-specific support require device testing.
+
+GitHub Actions uses Node 22, `npm ci`, tests, and the Vite build. The output in `dist/` supports project-subpath hosting. No deployment is performed by local build commands.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](./LICENSE) file for details.
+MIT. See [LICENSE](LICENSE).

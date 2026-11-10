@@ -1,0 +1,33 @@
+<style>
+  .panel { flex-direction: column; width: 620px; padding: 16px; gap: 10px; }
+  .row { flex-direction: row; gap: 8px; }
+  .heading { font-size: 22px; font-weight: 700; }
+  .hint { font-size: 14px; }
+</style>
+<Panel class="panel">
+  <div class="heading">XR DAW</div>
+  <div class="row">
+    <Button id="play"><ButtonLabel>Play / Pause</ButtonLabel></Button>
+    <Button id="stop"><ButtonLabel>Stop</ButtonLabel></Button>
+    <Button id="previous"><ButtonLabel>Previous bars</ButtonLabel></Button>
+    <Button id="next"><ButtonLabel>Next bars</ButtonLabel></Button>
+  </div>
+  <div class="row">
+    <Button id="track"><ButtonLabel>Next track</ButtonLabel></Button>
+    <Button id="lower"><ButtonLabel>Octave down</ButtonLabel></Button>
+    <Button id="higher"><ButtonLabel>Octave up</ButtonLabel></Button>
+    <Button id="seek"><ButtonLabel>Play from view</ButtonLabel></Button>
+  </div>
+  <div class="row">
+    <Button id="shorter"><ButtonLabel>Shorter note</ButtonLabel></Button>
+    <Button id="longer"><ButtonLabel>Longer note</ButtonLabel></Button>
+    <Button id="undo"><ButtonLabel>Undo</ButtonLabel></Button>
+    <Button id="redo"><ButtonLabel>Redo</ButtonLabel></Button>
+    <Button id="exit"><ButtonLabel>Exit VR</ButtonLabel></Button>
+  </div>
+  <div class="row">
+    <Button id="add"><ButtonLabel>Add note</ButtonLabel></Button>
+    <Button id="delete"><ButtonLabel>Delete note</ButtonLabel></Button>
+  </div>
+  <div class="hint">Select or grab a note. Move sideways for time, up for pitch. Edits snap to sixteenths.</div>
+</Panel>
