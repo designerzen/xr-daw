@@ -331,6 +331,47 @@ input[type="range"] {
 #controls.immersive {
   display: none;
 }
+#drop-target {
+  position: absolute;
+  inset: 12px;
+  display: none;
+  place-items: center;
+  border: 2px dashed #a3d2c5;
+  border-radius: 16px;
+  background: #10151fcc;
+  color: #d8e8e2;
+  font-size: 20px;
+  pointer-events: none;
+}
+#drop-target.visible {
+  display: grid;
+}
+.vinyl-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding-right: 6px;
+}
+#controls.audio-mode #track,
+#controls.audio-mode .tempo,
+#controls.audio-mode .transport > .divider {
+  display: none;
+}
+.vinyl-control[hidden],
+.menu-panel label[hidden] {
+  display: none;
+}
+.vinyl-control input {
+  accent-color: #b3d4c9;
+}
+#vinyl-condition {
+  margin-left: auto;
+  border: 0;
+  background: #17202d;
+  font-size: 12px;
+  padding: 5px;
+}
 @media (max-width: 540px) {
   .app-header {
     top: 18px;

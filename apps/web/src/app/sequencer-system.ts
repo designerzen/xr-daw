@@ -117,21 +117,51 @@ export function sequencerSystem(session: Session) {
         stop: () => session.stop(),
         "view-notes": () => session.setView("notes"),
         "view-velocity": () => session.setView("velocity"),
+        "view-waveform": () => session.setView("waveform"),
+        vinyl: () => {
+          if (session.view !== "waveform" || session.clipPlayer.vinylBusy)
+            return;
+          const operation = session.clipPlayer.configureVinyl(
+            !session.clipPlayer.vinylEnabled,
+          );
+          session.emit();
+          void operation.catch(session.onError).finally(() => session.emit());
+        },
+        condition: () => {
+          if (session.view !== "waveform" || session.clipPlayer.vinylBusy)
+            return;
+          const conditions = ["clean", "worn", "damaged"] as const;
+          const next =
+            conditions[
+              (conditions.indexOf(session.clipPlayer.vinylCondition) + 1) %
+                conditions.length
+            ];
+          const operation = session.clipPlayer.configureVinyl(true, next);
+          session.emit();
+          void operation.catch(session.onError).finally(() => session.emit());
+        },
         previous: () => session.page(-1),
         next: () => session.page(1),
         shorter: () => session.resize(-1),
         longer: () => session.resize(1),
-        undo: () => session.store.undo(),
-        redo: () => session.store.redo(),
+        undo: () => {
+          if (session.view !== "waveform") session.store.undo();
+        },
+        redo: () => {
+          if (session.view !== "waveform") session.store.redo();
+        },
         exit: () => this.world.exitXR(),
         lower: () => session.scrollPitch(-1),
         higher: () => session.scrollPitch(1),
         add: () => session.addNote(),
         delete: () => session.deleteNote(),
         seek: () => {
-          void session.audio
-            .play(session.store.project, session.pageTick)
-            .catch(session.onError);
+          if (session.view === "waveform")
+            void session.clipPlayer.play(0).catch(session.onError);
+          else
+            void session.audio
+              .play(session.store.project, session.pageTick)
+              .catch(session.onError);
         },
         track: () => {
           const tracks = session.store.project.tracks;
@@ -352,10 +382,27 @@ export function sequencerSystem(session: Session) {
         }
       }
       if (this.dirty && this.dragging.size === 0) {
+        this.viewPivot.visible = session.view !== "waveform";
         this.viewPivot.rotation.x =
           session.view === "velocity" ? -Math.PI / 2 : 0;
         const panel = this.world.requireSceneObject<UIKitMLAsset>("transport");
-        for (const view of ["notes", "velocity"] as const)
+        panel
+          .requireElementById("vinyl-options")
+          .setProperties({
+            display: session.view === "waveform" ? "flex" : "none",
+          });
+        panel
+          .requireElementById("vinyl")
+          .setProperties({
+            backgroundOpacity: session.clipPlayer.vinylEnabled ? 0.25 : 0.04,
+          });
+        panel
+          .requireElementById("condition-label")
+          .setProperties({ text: session.clipPlayer.vinylCondition });
+        panel.requireElementById("view-waveform").setProperties({
+          display: session.clipPlayer.clip ? "flex" : "none",
+        });
+        for (const view of ["notes", "velocity", "waveform"] as const)
           panel.requireElementById(`view-${view}`).setProperties({
             backgroundOpacity: session.view === view ? 0.25 : 0.04,
           });

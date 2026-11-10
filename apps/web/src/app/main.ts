@@ -1,11 +1,13 @@
 import { World, VisibilityState } from "@iwsdk/core";
 import projectOptions from "virtual:iwsdk-project";
-import { exportWav } from "./audio";
+import { encodeWav, exportWav } from "./audio";
 import { importMidi } from "./midi";
 import { restoreProject, saveProject } from "./persistence";
 import { demoProject, projectEnd, validateProject } from "./project";
 import { Session } from "./session";
 import { sequencerSystem } from "./sequencer-system";
+import { waveformSystem } from "./waveform-system";
+import type { VinylCondition } from "./vinyl-playback";
 import "./style.css";
 
 function download(blob: Blob, name: string) {
@@ -40,7 +42,7 @@ root.innerHTML = `
       <details id="project-menu" class="menu file-menu">
         <summary aria-label="Project menu" title="Project menu">${icon("file")}</summary>
         <div class="menu-panel">
-          <label class="file-button">Open MIDI or project<input id="open" type="file" accept=".mid,.midi,.json" /></label>
+          <label class="file-button">Open media or project<input id="open" type="file" accept="audio/*,.wav,.wave,.mp3,.ogg,.flac,.m4a,.aiff,.aif,.mid,.midi,.json" /></label>
           <button id="preset">Open demo</button><hr />
           <button id="save">Save project</button><button id="export">Export WAV</button>
         </div>
@@ -51,17 +53,20 @@ root.innerHTML = `
   <nav class="view-navigation" aria-label="View">
     <button id="view-notes" type="button" aria-pressed="true">Notes</button>
     <button id="view-velocity" type="button" aria-pressed="false">Velocity</button>
+    <button id="view-waveform" type="button" aria-pressed="false" hidden>Waveform</button>
   </nav>
   <section class="transport" aria-label="Transport">
     ${iconButton("play", "Play", "play", "primary")}${iconButton("stop", "Stop", "stop")}
     <span class="divider"></span>
     <select id="track" aria-label="Track" title="Track"></select>
     <label class="tempo"><input id="tempo" type="number" min="20" max="300" step="1" aria-label="Tempo" /><span>BPM</span></label>
+    <label id="vinyl-control" class="vinyl-control" hidden><input id="vinyl-enabled" type="checkbox" /> Vinyl</label>
     <details id="edit-menu" class="menu edit-menu">
       <summary aria-label="Editing options" title="Editing options">${icon("settings")}</summary>
       <div class="menu-panel">
         <div class="menu-row"><label><input id="loop" type="checkbox" /> Loop</label><label><input id="mute" type="checkbox" /> Mute</label></div>
         <label>Gain <input id="gain" type="range" min="0" max="1" step="0.01" /></label><hr />
+        <label id="vinyl-condition-control" hidden>Condition <select id="vinyl-condition" aria-label="Vinyl condition"><option value="clean">Clean</option><option value="worn">Worn</option><option value="damaged">Damaged</option></select></label>
         <div class="menu-row"><button id="previous">← Bars</button><button id="next">Bars →</button></div>
         <div class="menu-row"><button id="lower">Octave −</button><button id="higher">Octave +</button></div>
         <button id="seek">Play from this page</button><hr />
@@ -78,6 +83,7 @@ root.innerHTML = `
     ${iconButton("audition", "Audition note", "audition")}${iconButton("delete", "Delete note", "delete")}
   </section>
   <span id="status" class="status" role="status" aria-live="polite">Starting studio…</span>
+  <div id="drop-target" aria-hidden="true">Drop MIDI or audio</div>
   <output id="project-summary" class="sr-only"></output>
   <output id="position" class="sr-only">Bar 1 · Beat 1</output>
   <output id="selection" class="sr-only">Select a note to edit</output>
@@ -127,6 +133,7 @@ async function start() {
   }
   const session = new Session(initial);
   session.onError = report;
+  session.clipPlayer.onError = report;
   const world = await World.create(
     element<HTMLDivElement>("scene-container"),
     projectOptions,
@@ -147,13 +154,25 @@ async function start() {
   window.addEventListener("resize", resizeViewport);
   resizeViewport();
   world.registerSystem(sequencerSystem(session));
+  world.registerSystem(waveformSystem(session));
   let lastRevision = session.store.revision;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let trackKey = "";
   let destroyed = false;
 
   function sync() {
-    for (const view of ["notes", "velocity"] as const)
+    const waveform = session.view === "waveform";
+    root.classList.toggle("audio-mode", waveform);
+    element("vinyl-control").hidden = !waveform;
+    element("vinyl-condition-control").hidden = !waveform;
+    input("vinyl-enabled").checked = session.clipPlayer.vinylEnabled;
+    input("vinyl-enabled").disabled = session.clipPlayer.vinylBusy;
+    element<HTMLSelectElement>("vinyl-condition").value =
+      session.clipPlayer.vinylCondition;
+    element<HTMLSelectElement>("vinyl-condition").disabled =
+      !session.clipPlayer.vinylEnabled || session.clipPlayer.vinylBusy;
+    button("view-waveform").hidden = !session.clipPlayer.clip;
+    for (const view of ["notes", "velocity", "waveform"] as const)
       button(`view-${view}`).setAttribute(
         "aria-pressed",
         String(session.view === view),
@@ -163,6 +182,8 @@ async function start() {
       project.tracks.map((t) => [t.id, t.name]),
     );
     const select = element<HTMLSelectElement>("track");
+    select.disabled = waveform;
+    input("tempo").disabled = waveform;
     if (trackKey !== nextTrackKey) {
       select.replaceChildren(
         ...project.tracks.map((t) => {
@@ -178,9 +199,13 @@ async function start() {
     input("tempo").value = String(
       Math.round(project.tempos[0].bpm * 100) / 100,
     );
-    input("gain").value = String(session.track?.gain ?? 0.7);
-    input("mute").checked = session.track?.muted ?? false;
-    const note = session.store.selected;
+    input("gain").value = String(
+      waveform ? session.clipPlayer.gain : (session.track?.gain ?? 0.7),
+    );
+    input("mute").checked = waveform
+      ? session.clipPlayer.muted
+      : (session.track?.muted ?? false);
+    const note = waveform ? undefined : session.store.selected;
     element("note-inspector").hidden = !note;
     if (note) {
       const pitchNames = [
@@ -207,14 +232,19 @@ async function start() {
     input("velocity").value = String(note?.velocity ?? 0.7);
     for (const id of ["shorter", "longer", "audition", "delete"])
       button(id).disabled = !note;
-    button("undo").disabled = !session.store.canUndo;
-    button("redo").disabled = !session.store.canRedo;
-    button("previous").disabled = session.pageTick === 0;
+    button("undo").disabled = waveform || !session.store.canUndo;
+    button("redo").disabled = waveform || !session.store.canRedo;
+    for (const id of ["add", "lower", "higher"]) button(id).disabled = waveform;
+    button("previous").disabled = waveform || session.pageTick === 0;
     button("next").disabled =
-      session.pageTick + session.pageSize >= projectEnd(project);
-    element("project-name").textContent = project.name;
-    element("project-summary").textContent =
-      `${project.name} · ${project.notes.length} notes · ${session.visibleNotes.length} in view`;
+      waveform || session.pageTick + session.pageSize >= projectEnd(project);
+    element("project-name").textContent = waveform
+      ? session.clipPlayer.clip!.name
+      : project.name;
+    button("save").textContent = waveform ? "Download audio" : "Save project";
+    element("project-summary").textContent = waveform
+      ? `${session.clipPlayer.clip!.name} · ${session.clipPlayer.clip!.analysis.channels.reduce((count, channel) => count + channel.amplitudes.length, 0)} circles`
+      : `${project.name} · ${project.notes.length} notes · ${session.visibleNotes.length} in view`;
     if (lastRevision !== session.store.revision) {
       lastRevision = session.store.revision;
       clearTimeout(saveTimer);
@@ -260,18 +290,20 @@ async function start() {
       value === VisibilityState.Hidden ||
       value === VisibilityState.VisibleBlurred
     )
-      session.audio.pause();
+      session.pause();
   });
   handle("play", () => session.togglePlay());
   handle("stop", () => session.stop());
   handle("view-notes", () => session.setView("notes"));
   handle("view-velocity", () => session.setView("velocity"));
+  handle("view-waveform", () => session.setView("waveform"));
   handle("previous", () => session.page(-1));
   handle("next", () => session.page(1));
   handle("lower", () => session.scrollPitch(-1));
   handle("higher", () => session.scrollPitch(1));
   handle("seek", async () => {
-    await session.audio.play(session.store.project, session.pageTick);
+    if (session.view === "waveform") await session.clipPlayer.play(0);
+    else await session.audio.play(session.store.project, session.pageTick);
   });
   handle("shorter", () => session.resize(-1));
   handle("longer", () => session.resize(1));
@@ -285,6 +317,32 @@ async function start() {
   });
   input("loop").onchange = () => {
     session.audio.loop = input("loop").checked;
+    session.clipPlayer.loop = input("loop").checked;
+  };
+  const configureVinyl = async () => {
+    const condition = element<HTMLSelectElement>("vinyl-condition")
+      .value as VinylCondition;
+    const operation = session.clipPlayer.configureVinyl(
+      input("vinyl-enabled").checked,
+      condition,
+    );
+    session.emit();
+    status("Preparing vinyl…");
+    element("status").classList.add("visible");
+    try {
+      await operation;
+      status("Audio ready");
+    } catch (error) {
+      report(error);
+    } finally {
+      session.emit();
+    }
+  };
+  input("vinyl-enabled").onchange = () => {
+    void configureVinyl();
+  };
+  element<HTMLSelectElement>("vinyl-condition").onchange = () => {
+    void configureVinyl();
   };
   input("tempo").onchange = () => {
     const bpm = Number(input("tempo").value);
@@ -308,15 +366,19 @@ async function start() {
   element<HTMLSelectElement>("track").onchange = (event) =>
     session.selectTrack((event.target as HTMLSelectElement).value);
   input("gain").onchange = () =>
-    session.store.edit((p) => {
-      const t = p.tracks.find((t) => t.id === session.trackId);
-      if (t) t.gain = Number(input("gain").value);
-    });
+    session.view === "waveform"
+      ? (session.clipPlayer.gain = Number(input("gain").value))
+      : session.store.edit((p) => {
+          const t = p.tracks.find((t) => t.id === session.trackId);
+          if (t) t.gain = Number(input("gain").value);
+        });
   input("mute").onchange = () =>
-    session.store.edit((p) => {
-      const t = p.tracks.find((t) => t.id === session.trackId);
-      if (t) t.muted = input("mute").checked;
-    });
+    session.view === "waveform"
+      ? (session.clipPlayer.muted = input("mute").checked)
+      : session.store.edit((p) => {
+          const t = p.tracks.find((t) => t.id === session.trackId);
+          if (t) t.muted = input("mute").checked;
+        });
   input("velocity").onchange = () => {
     if (session.store.selected)
       session.store.updateNote(session.store.selected.id, {
@@ -326,54 +388,121 @@ async function start() {
   const fileName = () =>
     session.store.project.name.replace(/[^\w -]/g, "").trim() || "xr-daw";
   handle("save", () =>
-    download(
-      new Blob([JSON.stringify(session.store.project, null, 2)], {
-        type: "application/json",
-      }),
-      `${fileName()}.xrdaw.json`,
-    ),
+    session.view === "waveform"
+      ? download(session.clipPlayer.clip!.file, session.clipPlayer.clip!.name)
+      : download(
+          new Blob([JSON.stringify(session.store.project, null, 2)], {
+            type: "application/json",
+          }),
+          `${fileName()}.xrdaw.json`,
+        ),
   );
   handle("export", async () => {
     button("export").disabled = true;
     status("Rendering WAV…");
     try {
-      download(await exportWav(session.store.project), `${fileName()}.wav`);
+      const clip =
+        session.view === "waveform" ? session.clipPlayer.clip : undefined;
+      download(
+        clip
+          ? encodeWav(await session.clipPlayer.exportBuffer())
+          : await exportWav(session.store.project),
+        `${clip ? clip.name.replace(/\.[^.]+$/, "") + (session.clipPlayer.vinylEnabled ? `-vinyl-${session.clipPlayer.vinylCondition}` : "") : fileName()}.wav`,
+      );
       status("WAV exported");
     } finally {
       button("export").disabled = false;
     }
   });
   handle("preset", async () => {
+    const request = ++mediaRequest;
+    session.clipPlayer.cancelDecode();
     const response = await fetch(
       `${import.meta.env.BASE_URL}assets/midi/Stories_100BPM_Gmin.mid`,
     );
     if (!response.ok)
       throw new Error(`Could not load preset (${response.status}).`);
+    if (request !== mediaRequest || destroyed) return;
     session.load(
       importMidi(new Uint8Array(await response.arrayBuffer()), "Stories"),
     );
     status("Preset imported");
   });
-  input("open").onchange = async () => {
-    const file = input("open").files?.[0];
-    if (!file) return;
+  let mediaRequest = 0;
+  const loadMedia = async (file: File) => {
+    const request = ++mediaRequest;
+    session.clipPlayer.cancelDecode();
     try {
-      if (file.size > 10 * 1024 * 1024)
-        throw new Error("Files must be smaller than 10 MB.");
+      const musical = /\.(json|midi?)$/i.test(file.name);
+      if (file.size > (musical ? 10 : 100) * 1024 * 1024)
+        throw new Error(
+          musical
+            ? "MIDI and project files must be smaller than 10 MB."
+            : "Audio files must be smaller than 100 MB.",
+        );
+      if (!musical) {
+        status("Decoding audio and analyzing spectrum…");
+        element("status").classList.add("visible");
+        const clip = await session.clipPlayer.decode(file);
+        if (request !== mediaRequest || destroyed) return;
+        session.loadClip(clip);
+        if (session.clipPlayer.vinylEnabled) {
+          const operation = session.clipPlayer.configureVinyl(true);
+          session.emit();
+          await operation;
+          if (request !== mediaRequest || destroyed) return;
+          session.emit();
+        }
+        status("Audio ready · click to play, drag to scratch");
+        return;
+      }
       const project = /\.json$/i.test(file.name)
         ? validateProject(JSON.parse(await file.text()))
         : importMidi(
             new Uint8Array(await file.arrayBuffer()),
             file.name.replace(/\.midi?$/i, ""),
           );
+      if (request !== mediaRequest || destroyed) return;
       session.load(project);
       status("Project loaded");
     } catch (error) {
-      report(error);
-    } finally {
-      input("open").value = "";
+      if (request === mediaRequest && !destroyed) report(error);
     }
   };
+  input("open").onchange = () => {
+    const file = input("open").files?.[0];
+    input("open").value = "";
+    if (file) void loadMedia(file);
+  };
+  let dragDepth = 0;
+  const dragEnter = (event: DragEvent) => {
+    if (!event.dataTransfer?.types.includes("Files")) return;
+    event.preventDefault();
+    dragDepth++;
+    element("drop-target").classList.add("visible");
+  };
+  const dragOver = (event: DragEvent) => {
+    if (!event.dataTransfer?.types.includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  };
+  const dragLeave = () => {
+    if (--dragDepth <= 0) {
+      dragDepth = 0;
+      element("drop-target").classList.remove("visible");
+    }
+  };
+  const drop = (event: DragEvent) => {
+    event.preventDefault();
+    dragDepth = 0;
+    element("drop-target").classList.remove("visible");
+    const file = event.dataTransfer?.files[0];
+    if (file) void loadMedia(file);
+  };
+  window.addEventListener("dragenter", dragEnter);
+  window.addEventListener("dragover", dragOver);
+  window.addEventListener("dragleave", dragLeave);
+  window.addEventListener("drop", drop);
   const keyboard = (event: KeyboardEvent) => {
     const target = event.target as HTMLElement;
     if (
@@ -385,6 +514,18 @@ async function start() {
     if (event.code === "Space") {
       event.preventDefault();
       void session.togglePlay().catch(report);
+    }
+    if (session.view === "waveform") {
+      if (event.code === "ArrowLeft" || event.code === "ArrowRight") {
+        event.preventDefault();
+        void session.clipPlayer
+          .play(
+            session.clipPlayer.positionSeconds +
+              (event.code === "ArrowLeft" ? -1 : 1),
+          )
+          .catch(report);
+      }
+      return;
     }
     if (event.code === "Delete" || event.code === "Backspace") {
       event.preventDefault();
@@ -421,8 +562,10 @@ async function start() {
     }
     const beats = session.audio.positionTick / session.store.project.ppq;
     element("position").textContent =
-      `Bar ${Math.floor(beats / 4) + 1} · Beat ${((beats % 4) + 1).toFixed(1)}`;
-    const playLabel = session.audio.playing ? "Pause" : "Play";
+      session.view === "waveform"
+        ? `${session.clipPlayer.positionSeconds.toFixed(2)}s / ${session.clipPlayer.clip!.buffer.duration.toFixed(2)}s`
+        : `Bar ${Math.floor(beats / 4) + 1} · Beat ${((beats % 4) + 1).toFixed(1)}`;
+    const playLabel = session.playing ? "Pause" : "Play";
     if (button("play").getAttribute("aria-label") !== playLabel) {
       button("play").setAttribute("aria-label", playLabel);
       button("play").title = playLabel;
@@ -438,6 +581,10 @@ async function start() {
     visibilityCleanup();
     window.removeEventListener("keydown", keyboard);
     window.removeEventListener("resize", resizeViewport);
+    window.removeEventListener("dragenter", dragEnter);
+    window.removeEventListener("dragover", dragOver);
+    window.removeEventListener("dragleave", dragLeave);
+    window.removeEventListener("drop", drop);
     void saveProject(session.store.project).catch(console.error);
     session.dispose();
     world.destroy();

@@ -27,6 +27,26 @@ export default async function run({ frame }) {
       return Math.abs(angle - (view === "velocity" ? -Math.PI / 2 : 0)) < 1e-6;
     }, view);
   }
+  const waveformAvailable = await frame.evaluate(
+    () =>
+      !!window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName(
+        "Waveform circles channel 1",
+      ),
+  );
+  if (waveformAvailable) {
+    await frame.evaluate(() =>
+      window.FRAMEWORK_MCP_RUNTIME.world
+        .requireSceneObject("transport")
+        .requireElementById("view-waveform")
+        .dispatchEvent({ type: "click" }),
+    );
+    await frame.waitForFunction(
+      () =>
+        window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName(
+          "Audio waveform",
+        ).visible,
+    );
+  }
   return frame.evaluate(() => {
     const world = window.FRAMEWORK_MCP_RUNTIME.world;
     let note;
@@ -43,6 +63,8 @@ export default async function run({ frame }) {
         : null,
       panelVisible: world.requireSceneObject("transport").visible,
       viewNavigation: true,
+      waveformVisible:
+        world.scene.getObjectByName("Audio waveform")?.visible ?? false,
     };
   });
 }

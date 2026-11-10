@@ -22,12 +22,18 @@ In another terminal, from the repository root:
 
 ```sh
 npm run test:browser
+npm run test:media
+npm run test:vinyl
 npm run test:xr
 npm run dev:status
 npm run dev:down
 ```
 
 The desktop smoke test checks note dragging, editing, playback, project downloads, autosave, MIDI import, and WAV export. Artifacts are written to `apps/web/artifacts` and are ignored by Git.
+
+The media test generates stereo WAV audio with known frequencies, drops MIDI and WAV files, checks circle instances and FFT colors, seeks through real pointer events, and verifies that backward scratching plays reversed PCM. It also checks file chooser loading and failed-import recovery.
+
+The vinyl browser test enables the real AudioWorklet, checks program seeking and negative platter speed while dragging, changes pressing condition, and downloads the rendered vinyl WAV.
 
 The XR entry check enters VR through the app button. For other SDK commands, run the CLI from the app workspace:
 
@@ -42,5 +48,9 @@ An active emulated session is required to inspect controller poses and grabbing.
 ## Audio and MIDI modules
 
 The active audio graph is in `apps/web/src/app/audio.ts`. Supporting modules for synthesis, effects, WebMIDI, Electron, and Bluetooth are under `apps/web/src/audio`; acoustic assets are under `apps/web/src/assets/audio/acoustics`.
+
+Audio-file playback is in `clip-player.ts`; `spectrum.worker.ts` analyzes channel peaks and windowed FFT frequencies without blocking the scene. `waveform-system.ts` renders instanced rings and handles seeking/scratching through shared desktop/XR pointer events. Audio clips remain in memory, separate from the MIDI project save format.
+
+`vinyl-playback.ts` adapts the pinned `rauchg/vinyl` modules in `apps/web/public/vendor/vinyl` (commit and license recorded there). The custom worklet and mastering worker under `public/audio` connect linear waveform coordinates to groove angle, seeking, physical platter controls, quality presets, and offline WAV rendering. Keep upstream modules unmodified and preserve their MIT attribution when updating them.
 
 The Web Bluetooth connection exposes raw BLE-MIDI packets through `onPacket` and accepts already-framed packets through `writePacket`. It does not yet decode BLE-MIDI messages or route hardware into the sequencer. The app plays imported notes using its built-in synthesizer.

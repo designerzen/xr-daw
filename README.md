@@ -18,6 +18,20 @@ Start with the included song or open a `.mid` or `.midi` file from your device. 
 
 Projects autosave in your browser on your device. Download a project file to keep a copy or move it to another computer. Reopening that file restores its notes, tracks, levels, and tempo map.
 
+## Audio waveforms
+
+Drop a MIDI, audio, or project file anywhere on the app, or choose **Open media or project** from the project menu. WAV/WAVE and other audio formats supported by your browser (such as MP3, Ogg, FLAC, and M4A) open in **Waveform** view, alongside your MIDI views.
+
+Each audio channel forms a stack of circular cross-sections in 3D. Time runs along the stack, amplitude controls each circle's radius, and a windowed FFT colors each circle by its local spectral frequency. Long files use peak-preserving time buckets, with up to 8,192 circles across the channels.
+
+Press anywhere on the waveform to play from that time. Hold and drag to scratch: moving left plays audio backward, moving right plays forward, and speed follows your movement. Release to continue normal playback from that point. Left and right arrow keys jump one second. Play, pause, stop, loop, gain, and mute also work on audio.
+
+Audio stays in memory for the current session; MIDI project autosaves do not embed it. **Download audio** keeps the original file, and **Export WAV** saves the decoded audio as WAV. Audio imports support up to ten minutes, eight channels, and a 100 MB file size.
+
+Enable **Vinyl** in the transport to hear the audio through [rauchg/vinyl](https://github.com/rauchg/vinyl)'s physical groove, stylus, cartridge, and phono simulation. Choose **Clean**, **Worn**, or **Damaged** in the editing menu to change the pressing and stylus condition. Your audio is cut into a simulated stereo record in a background worker; waveform scratching then controls its platter, including reverse motion and inertia. Disable Vinyl to return to the original audio. The VR menu provides the same Vinyl and condition controls.
+
+With Vinyl enabled, **Export WAV** renders the selected vinyl condition; **Download audio** always keeps the original file. Multichannel audio is folded into a stereo groove for Vinyl playback. The engine source and MIT license are included under `apps/web/public/vendor/vinyl`.
+
 Playback uses a polyphonic triangle synthesizer. MIDI formats 0 and 1 are supported, including multiple tracks and tempo changes. Bar labels use 4/4 time. WAV export supports projects up to ten minutes long.
 
 ## Virtual reality
