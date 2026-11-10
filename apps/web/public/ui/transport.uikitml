@@ -1,0 +1,37 @@
+<style>
+  .panel { flex-direction: column; width: 560px; padding: 10px; gap: 8px; }
+  .row { flex-direction: row; gap: 6px; }
+  .options { flex-direction: column; gap: 8px; }
+</style>
+<Panel class="panel">
+  <div class="row">
+    <Button id="view-notes"><ButtonLabel>Notes</ButtonLabel></Button>
+    <Button id="view-velocity"><ButtonLabel>Velocity</ButtonLabel></Button>
+  </div>
+  <div class="row">
+    <Button id="play"><ButtonLabel>Play</ButtonLabel></Button>
+    <Button id="stop"><ButtonLabel>Stop</ButtonLabel></Button>
+    <Button id="previous"><ButtonLabel>Prev</ButtonLabel></Button>
+    <Button id="next"><ButtonLabel>Next</ButtonLabel></Button>
+    <Button id="track"><ButtonLabel>Track</ButtonLabel></Button>
+    <Button id="more"><ButtonLabel>Menu</ButtonLabel></Button>
+    <Button id="exit"><ButtonLabel>Exit</ButtonLabel></Button>
+  </div>
+  <div id="advanced" class="options" style="display: none">
+    <div class="row">
+      <Button id="lower"><ButtonLabel>Octave -</ButtonLabel></Button>
+      <Button id="higher"><ButtonLabel>Octave +</ButtonLabel></Button>
+      <Button id="seek"><ButtonLabel>Play from view</ButtonLabel></Button>
+    </div>
+    <div class="row">
+      <Button id="shorter"><ButtonLabel>Shorter</ButtonLabel></Button>
+      <Button id="longer"><ButtonLabel>Longer</ButtonLabel></Button>
+      <Button id="add"><ButtonLabel>Add</ButtonLabel></Button>
+      <Button id="delete"><ButtonLabel>Delete</ButtonLabel></Button>
+    </div>
+    <div class="row">
+      <Button id="undo"><ButtonLabel>Undo</ButtonLabel></Button>
+      <Button id="redo"><ButtonLabel>Redo</ButtonLabel></Button>
+    </div>
+  </div>
+</Panel>

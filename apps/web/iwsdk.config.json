@@ -1,5 +1,5 @@
 {
-  "$schema": "./node_modules/@iwsdk/core/dist/schemas/iwsdk-project.v1.schema.json",
+  "$schema": "../../node_modules/@iwsdk/core/dist/schemas/iwsdk-project.v1.schema.json",
   "version": "iwsdk.project.v1",
   "scene": "./public/scenes/main.iwsdk.scene.json",
   "assets": { "module": "./src/app/assets" },
@@ -7,7 +7,7 @@
   "world": {
     "xr": { "mode": "vr", "offer": "none", "features": { "handTracking": true } },
     "input": { "canvasPointerEvents": true },
-    "render": { "near": 0.01, "far": 100, "camera": { "position": [0, 1.6, 0.7], "lookAt": [0, 1.4, -2] } },
+    "render": { "near": 0.01, "far": 100, "camera": { "position": [0.7, 1.9, 0.7], "lookAt": [0, 1.5, -1.8] } },
     "features": { "grabbing": true, "locomotion": false, "physics": false, "spatialUI": { "kit": "horizon" } }
   },
   "dev": { "emulator": { "device": "metaQuest3" } }

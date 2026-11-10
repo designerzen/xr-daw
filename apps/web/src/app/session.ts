@@ -7,6 +7,7 @@ export class Session {
   pageTick = 0;
   basePitch = 48;
   trackId: string;
+  view: "notes" | "velocity" = "notes";
   private listeners = new Set<() => void>();
   private revision = 0;
   private unsubscribe: () => void;
@@ -33,6 +34,11 @@ export class Session {
   }
   emit() {
     this.listeners.forEach((fn) => fn());
+  }
+  setView(view: "notes" | "velocity") {
+    if (this.view === view) return;
+    this.view = view;
+    this.emit();
   }
   get pageSize() {
     return this.store.project.ppq * 16;

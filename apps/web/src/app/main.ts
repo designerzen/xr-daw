@@ -18,33 +18,69 @@ function download(blob: Blob, name: string) {
 }
 
 const root = document.querySelector<HTMLElement>("#controls")!;
+const icons: Record<string, string> = {
+  play: "M8 5l11 7-11 7z",
+  pause: "M8 5v14M16 5v14",
+  stop: "M6 6h12v12H6z",
+  file: "M3 7h7l2 2h9v11H3zM3 7V4h7l2 3",
+  settings: "M4 7h16M4 17h16M9 4v6M15 14v6",
+  shorter: "M5 12h14",
+  longer: "M5 12h14M12 5v14",
+  audition: "M4 10h4l5-4v12l-5-4H4zM17 9q4 3 0 6",
+  delete: "M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13",
+};
+const icon = (name: string) =>
+  `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${icons[name]}"/></svg>`;
+const iconButton = (id: string, label: string, name: string, className = "") =>
+  `<button type="button" id="${id}" class="icon-button ${className}" aria-label="${label}" title="${label}">${icon(name)}</button>`;
 root.innerHTML = `
-  <header><div><span class="eyebrow">IMMERSIVE WEB STUDIO</span><h1>XR DAW</h1></div><button id="enter-vr" disabled>Enter VR</button></header>
-  <section class="toolbar" aria-label="Project">
-    <label class="file-button">Open MIDI / project<input id="open" type="file" accept=".mid,.midi,.json" /></label>
-    <button id="preset">Load preset MIDI</button><button id="save">Download project</button><button id="export">Export WAV</button>
+  <header class="app-header">
+    <div class="identity"><h1>XR DAW</h1><span id="project-name"></span></div>
+    <nav aria-label="Project">
+      <details id="project-menu" class="menu file-menu">
+        <summary aria-label="Project menu" title="Project menu">${icon("file")}</summary>
+        <div class="menu-panel">
+          <label class="file-button">Open MIDI or project<input id="open" type="file" accept=".mid,.midi,.json" /></label>
+          <button id="preset">Open demo</button><hr />
+          <button id="save">Save project</button><button id="export">Export WAV</button>
+        </div>
+      </details>
+      <button id="enter-vr" disabled>Enter VR</button>
+    </nav>
+  </header>
+  <nav class="view-navigation" aria-label="View">
+    <button id="view-notes" type="button" aria-pressed="true">Notes</button>
+    <button id="view-velocity" type="button" aria-pressed="false">Velocity</button>
+  </nav>
+  <section class="transport" aria-label="Transport">
+    ${iconButton("play", "Play", "play", "primary")}${iconButton("stop", "Stop", "stop")}
+    <span class="divider"></span>
+    <select id="track" aria-label="Track" title="Track"></select>
+    <label class="tempo"><input id="tempo" type="number" min="20" max="300" step="1" aria-label="Tempo" /><span>BPM</span></label>
+    <details id="edit-menu" class="menu edit-menu">
+      <summary aria-label="Editing options" title="Editing options">${icon("settings")}</summary>
+      <div class="menu-panel">
+        <div class="menu-row"><label><input id="loop" type="checkbox" /> Loop</label><label><input id="mute" type="checkbox" /> Mute</label></div>
+        <label>Gain <input id="gain" type="range" min="0" max="1" step="0.01" /></label><hr />
+        <div class="menu-row"><button id="previous">← Bars</button><button id="next">Bars →</button></div>
+        <div class="menu-row"><button id="lower">Octave −</button><button id="higher">Octave +</button></div>
+        <button id="seek">Play from this page</button><hr />
+        <div class="menu-row"><button id="undo">Undo</button><button id="redo">Redo</button></div>
+        <button id="add">Add note</button>
+        <p class="shortcut-hint">Space to play · Arrows to edit<br />Shift + arrows to resize or transpose<br />Ctrl / Cmd + Z to undo</p>
+      </div>
+    </details>
   </section>
-  <section class="toolbar" aria-label="Transport">
-    <button id="play" class="primary">Play</button><button id="stop">Stop</button>
-    <label><input id="loop" type="checkbox" /> Loop project</label>
-    <label>Tempo <input id="tempo" type="number" min="20" max="300" step="1" /> BPM</label>
-    <output id="position">Bar 1 · Beat 1</output>
+  <section id="note-inspector" class="note-inspector" aria-label="Note inspector" hidden>
+    <span id="note-label"></span>
+    ${iconButton("shorter", "Shorter note", "shorter")}${iconButton("longer", "Longer note", "longer")}
+    <input id="velocity" type="range" min="0.01" max="1" step="0.01" aria-label="Velocity" title="Velocity" disabled />
+    ${iconButton("audition", "Audition note", "audition")}${iconButton("delete", "Delete note", "delete")}
   </section>
-  <section class="toolbar" aria-label="Track and timeline">
-    <label>Track <select id="track"></select></label>
-    <label>Gain <input id="gain" type="range" min="0" max="1" step="0.01" /></label>
-    <label><input id="mute" type="checkbox" /> Mute</label>
-    <button id="previous">← Bars</button><button id="next">Bars →</button><button id="seek">Play from view</button>
-    <button id="lower">Octave ↓</button><button id="higher">Octave ↑</button>
-  </section>
-  <section class="toolbar" aria-label="Note inspector">
-    <output id="selection">Select a note to edit</output>
-    <button id="shorter">Shorter</button><button id="longer">Longer</button>
-    <label>Velocity <input id="velocity" type="range" min="0.01" max="1" step="0.01" disabled /></label>
-    <button id="audition">Audition</button><button id="add">Add note</button><button id="delete">Delete</button><button id="undo">Undo</button><button id="redo">Redo</button>
-  </section>
-  <footer><span id="project-name"></span><span id="status" role="status" aria-live="polite">Starting studio…</span></footer>
-  <p class="help">Drag notes to move them; edits snap to sixteenths. Arrow keys move the selected note. Shift + arrows resize or transpose by octave. Space plays or pauses. Ctrl/Cmd + Z undoes. In VR, use the transport panel below the timeline.</p>
+  <span id="status" class="status" role="status" aria-live="polite">Starting studio…</span>
+  <output id="project-summary" class="sr-only"></output>
+  <output id="position" class="sr-only">Bar 1 · Beat 1</output>
+  <output id="selection" class="sr-only">Select a note to edit</output>
 `;
 const element = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -52,11 +88,35 @@ const input = (id: string) => element<HTMLInputElement>(id);
 const button = (id: string) => element<HTMLButtonElement>(id);
 const status = (message: string) => {
   element("status").textContent = message;
+  element("status").classList.remove("visible");
 };
 const report = (error: unknown) => {
   console.error(error);
   status(error instanceof Error ? error.message : String(error));
+  element("status").classList.add("visible");
 };
+
+const menus = [...root.querySelectorAll<HTMLDetailsElement>("details")];
+const closeMenus = () =>
+  menus.forEach((menu) => {
+    menu.open = false;
+  });
+document.addEventListener("pointerdown", (event) => {
+  if (!(event.target as HTMLElement).closest("details")) closeMenus();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeMenus();
+});
+menus.forEach((menu) =>
+  menu.addEventListener("toggle", () => {
+    if (menu.open)
+      menus
+        .filter((other) => other !== menu)
+        .forEach((other) => {
+          other.open = false;
+        });
+  }),
+);
 
 async function start() {
   let initial = demoProject();
@@ -67,21 +127,10 @@ async function start() {
   }
   const session = new Session(initial);
   session.onError = report;
-  let activeWorld: World | undefined;
-  const desktopLayout = () => {
-    if (activeWorld?.session || activeWorld?.sessionRequestPending) return;
-    const container = element("scene-container");
-    container.style.top = `${root.getBoundingClientRect().bottom + 8}px`;
-    container.style.bottom = "55px";
-    window.dispatchEvent(new Event("resize"));
-  };
-  const resizeControls = new ResizeObserver(desktopLayout);
-  resizeControls.observe(root);
   const world = await World.create(
     element<HTMLDivElement>("scene-container"),
     projectOptions,
   );
-  activeWorld = world;
   const resizeViewport = () => {
     if (world.session) return;
     const container = element("scene-container");
@@ -104,6 +153,11 @@ async function start() {
   let destroyed = false;
 
   function sync() {
+    for (const view of ["notes", "velocity"] as const)
+      button(`view-${view}`).setAttribute(
+        "aria-pressed",
+        String(session.view === view),
+      );
     const project = session.store.project;
     const nextTrackKey = JSON.stringify(
       project.tracks.map((t) => [t.id, t.name]),
@@ -127,6 +181,25 @@ async function start() {
     input("gain").value = String(session.track?.gain ?? 0.7);
     input("mute").checked = session.track?.muted ?? false;
     const note = session.store.selected;
+    element("note-inspector").hidden = !note;
+    if (note) {
+      const pitchNames = [
+        "C",
+        "C♯",
+        "D",
+        "D♯",
+        "E",
+        "F",
+        "F♯",
+        "G",
+        "G♯",
+        "A",
+        "A♯",
+        "B",
+      ];
+      element("note-label").textContent =
+        `${pitchNames[note.pitch % 12]}${Math.floor(note.pitch / 12) - 1}`;
+    }
     element("selection").textContent = note
       ? `MIDI ${note.pitch} · ${(note.start / project.ppq).toFixed(2)} beats · ${(note.duration / project.ppq).toFixed(2)} long`
       : "Select a note to edit";
@@ -139,7 +212,8 @@ async function start() {
     button("previous").disabled = session.pageTick === 0;
     button("next").disabled =
       session.pageTick + session.pageSize >= projectEnd(project);
-    element("project-name").textContent =
+    element("project-name").textContent = project.name;
+    element("project-summary").textContent =
       `${project.name} · ${project.notes.length} notes · ${session.visibleNotes.length} in view`;
     if (lastRevision !== session.store.revision) {
       lastRevision = session.store.revision;
@@ -155,7 +229,12 @@ async function start() {
   sync();
   const handle = (id: string, action: () => void | Promise<void>) => {
     button(id).onclick = () => {
-      Promise.resolve().then(action).catch(report);
+      Promise.resolve()
+        .then(action)
+        .then(() => {
+          element<HTMLDetailsElement>("project-menu").open = false;
+        })
+        .catch(report);
     };
   };
   // Session requests must be made directly during the user's click, without awaiting file/audio loading.
@@ -164,10 +243,6 @@ async function start() {
   button("enter-vr").onclick = () => {
     if (world.session) world.exitXR();
     else {
-      // IWER preserves the canvas CSS aspect at entry. Expand it before requesting
-      // a session so a short desktop editing viewport doesn't become a thin XR view.
-      element("scene-container").style.top = "0";
-      element("scene-container").style.bottom = "0";
       world.renderer.setSize(window.innerWidth, window.innerHeight);
       requestingXR = true;
       void session.audio.unlock().catch(report);
@@ -179,7 +254,6 @@ async function start() {
     root.classList.toggle("immersive", immersive);
     button("enter-vr").textContent = immersive ? "Exit VR" : "Enter VR";
     if (!immersive) {
-      desktopLayout();
       resizeViewport();
     }
     if (
@@ -190,6 +264,8 @@ async function start() {
   });
   handle("play", () => session.togglePlay());
   handle("stop", () => session.stop());
+  handle("view-notes", () => session.setView("notes"));
+  handle("view-velocity", () => session.setView("velocity"));
   handle("previous", () => session.page(-1));
   handle("next", () => session.page(1));
   handle("lower", () => session.scrollPitch(-1));
@@ -300,7 +376,11 @@ async function start() {
   };
   const keyboard = (event: KeyboardEvent) => {
     const target = event.target as HTMLElement;
-    if (target.closest("input, select, textarea, button, [contenteditable]"))
+    if (
+      target.closest(
+        "input, select, textarea, button, summary, [contenteditable]",
+      )
+    )
       return;
     if (event.code === "Space") {
       event.preventDefault();
@@ -331,17 +411,23 @@ async function start() {
     if (requestingXR && !world.sessionRequestPending) {
       requestingXR = false;
       if (!world.session) {
-        desktopLayout();
         resizeViewport();
-        status(
-          "VR did not start. Check headset support and browser permissions.",
+        report(
+          new Error(
+            "VR did not start. Check headset support and browser permissions.",
+          ),
         );
       }
     }
     const beats = session.audio.positionTick / session.store.project.ppq;
     element("position").textContent =
       `Bar ${Math.floor(beats / 4) + 1} · Beat ${((beats % 4) + 1).toFixed(1)}`;
-    button("play").textContent = session.audio.playing ? "Pause" : "Play";
+    const playLabel = session.audio.playing ? "Pause" : "Play";
+    if (button("play").getAttribute("aria-label") !== playLabel) {
+      button("play").setAttribute("aria-label", playLabel);
+      button("play").title = playLabel;
+      button("play").innerHTML = icon(session.audio.playing ? "pause" : "play");
+    }
   }, 100);
   const dispose = () => {
     if (destroyed) return;
@@ -350,7 +436,6 @@ async function start() {
     clearInterval(interval);
     unsubscribe();
     visibilityCleanup();
-    resizeControls.disconnect();
     window.removeEventListener("keydown", keyboard);
     window.removeEventListener("resize", resizeViewport);
     void saveProject(session.store.project).catch(console.error);

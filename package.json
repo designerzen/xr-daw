@@ -1,41 +1,27 @@
 {
-  "name": "webxr-daw",
-  "private": false,
+  "name": "xr-daw",
+  "private": true,
   "author": "designerzen <designerzen@gmail.com>",
   "license": "MIT",
+  "packageManager": "npm@11.8.0",
+  "workspaces": ["apps/*"],
   "scripts": {
-    "dev": "vite",
-    "dev:runtime": "vite",
-    "dev:down": "iwsdk dev down",
-    "dev:status": "iwsdk dev status",
+    "dev": "turbo run dev",
     "start": "npm run dev",
-    "build": "npm run typecheck && vite build",
+    "build": "turbo run build",
     "bundle": "npm run build",
-    "serve": "vite preview --host",
-    "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts",
-    "format": "prettier --write src/app tests"
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "check": "turbo run typecheck test build",
+    "serve": "turbo run serve",
+    "format": "turbo run format",
+    "dev:runtime": "npm run dev:runtime --workspace @xr-daw/web",
+    "dev:down": "npm run dev:down --workspace @xr-daw/web",
+    "dev:status": "npm run dev:status --workspace @xr-daw/web",
+    "test:browser": "npm run test:browser --workspace @xr-daw/web",
+    "test:xr": "npm run test:xr --workspace @xr-daw/web"
   },
-  "dependencies": {
-    "@iwsdk/core": "1.0.1",
-    "@pmndrs/uikit": "1.0.74",
-    "@pmndrs/uikit-horizon": "1.0.74",
-    "@pmndrs/uikit-lucide": "1.0.74",
-    "three": "npm:super-three@0.181.0",
-    "midi-file": "1.2.4",
-    "webmidi": "^3.1.12"
-  },
-  "devDependencies": {
-    "@iwsdk/cli": "1.0.1",
-    "@iwsdk/vite-plugin-dev": "1.0.1",
-    "@types/three": "^0.181.0",
-    "@types/node": "^24.0.0",
-    "typescript": "^5.7.3",
-    "vite": "^7.1.4",
-    "vite-plugin-static-copy": "^3.1.0",
-    "tsx": "^4.20.0",
-    "prettier": "^3.4.2"
-  },
+  "devDependencies": { "prettier": "^3.4.2", "turbo": "2.11.10" },
   "overrides": { "three": "npm:super-three@0.181.0" },
   "engines": { "node": ">=22.12.0" }
 }

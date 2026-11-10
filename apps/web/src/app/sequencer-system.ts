@@ -5,9 +5,11 @@ import {
   Color,
   createSystem,
   DistanceGrabbable,
+  DirectionalLight,
   Entity,
   Grabbed,
   GridHelper,
+  Group,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -20,6 +22,7 @@ import {
 import { NoteView } from "./components";
 import { snapTick, type Note } from "./project";
 import { Session } from "./session";
+import { MAX_NOTE_DEPTH, noteDepth } from "./note-depth";
 
 const LEFT = -1.6;
 const WIDTH = 3.2;
@@ -56,26 +59,52 @@ export function sequencerSystem(session: Session) {
     private dirty = true;
     private revision = -1;
     private viewKey = "";
+    private viewPivot = new Group();
+    private content = new Group();
+    private contentEntity!: Entity;
     private playhead = new Mesh(
       new BoxGeometry(0.008, ROW * 36, 0.008),
       new MeshBasicMaterial({ color: 0xffffff }),
     );
 
     init() {
+      // Rotate the data, never the headset. Local musical coordinates stay unchanged.
+      this.viewPivot.name = "Sequencer view";
+      this.viewPivot.position.set(0, BOTTOM + ROW * 18, Z + MAX_NOTE_DEPTH / 2);
+      this.content.position.copy(this.viewPivot.position).negate();
+      const pivotEntity = this.world.createTransformEntity(this.viewPivot);
+      this.contentEntity = this.world.createTransformEntity(
+        this.content,
+        pivotEntity,
+      );
       this.scene.background = new Color("#10151f");
-      this.scene.add(new AmbientLight(0xffffff, 2));
+      const ambient = new AmbientLight(0xffffff, 0.9);
+      const light = new DirectionalLight(0xffffff, 2.2);
+      light.position.set(-3, 5, 2);
+      this.scene.add(ambient, light);
       const floor = new GridHelper(20, 40, 0x27374f, 0x1b2638);
       floor.position.y = -0.02;
       this.scene.add(floor);
       this.playhead.position.set(LEFT, BOTTOM + ROW * 18, Z + 0.07);
-      this.scene.add(this.playhead);
+      this.content.add(this.playhead);
       this.cleanupFuncs.push(
         session.subscribe(() => {
           this.dirty = true;
         }),
       );
       const panel = this.world.requireSceneObject<UIKitMLAsset>("transport");
-      panel.document.setTargetDimensions(1.6, 0.65);
+      panel.document.setTargetDimensions(1.15, 0.6);
+      const advanced = panel.requireElementById("advanced");
+      const more = panel.requireElementById("more");
+      let expanded = false;
+      const toggleOptions = () => {
+        expanded = !expanded;
+        advanced.setProperties({ display: expanded ? "flex" : "none" });
+      };
+      more.addEventListener("click", toggleOptions);
+      this.cleanupFuncs.push(() =>
+        more.removeEventListener("click", toggleOptions),
+      );
       this.cleanupFuncs.push(
         this.world.visibilityState.subscribe((value) => {
           panel.visible = value !== "non-immersive";
@@ -86,6 +115,8 @@ export function sequencerSystem(session: Session) {
           void session.togglePlay().catch(session.onError);
         },
         stop: () => session.stop(),
+        "view-notes": () => session.setView("notes"),
+        "view-velocity": () => session.setView("velocity"),
         previous: () => session.page(-1),
         next: () => session.page(1),
         shorter: () => session.resize(-1),
@@ -121,6 +152,7 @@ export function sequencerSystem(session: Session) {
         );
       }
       this.cleanupFuncs.push(() => {
+        this.scene.remove(ambient, light);
         floor.geometry.dispose();
         floor.material.dispose();
         this.playhead.geometry.dispose();
@@ -132,13 +164,40 @@ export function sequencerSystem(session: Session) {
       this.decorations.forEach((entity) => entity.dispose());
       this.decorations = [];
       const add = (object: Mesh | Sprite) =>
-        this.decorations.push(this.world.createTransformEntity(object));
+        this.decorations.push(
+          this.world.createTransformEntity(object, this.contentEntity),
+        );
       const board = new Mesh(
         new BoxGeometry(WIDTH + 0.03, ROW * 36 + 0.03, 0.025),
         new MeshBasicMaterial({ color: 0x182232 }),
       );
       board.position.set(0, BOTTOM + ROW * 18, Z - 0.035);
       add(board);
+      const velocityAxis = new Mesh(
+        new BoxGeometry(0.003, 0.003, MAX_NOTE_DEPTH),
+        new MeshBasicMaterial({ color: 0x546581 }),
+      );
+      velocityAxis.position.set(
+        LEFT - 0.06,
+        BOTTOM - 0.06,
+        Z + MAX_NOTE_DEPTH / 2,
+      );
+      add(velocityAxis);
+      for (const value of [0, 0.5, 1]) {
+        const tick = new Mesh(
+          new BoxGeometry(0.025, 0.003, 0.003),
+          new MeshBasicMaterial({ color: 0x546581 }),
+        );
+        tick.position.set(
+          LEFT - 0.06,
+          BOTTOM - 0.06,
+          Z + value * MAX_NOTE_DEPTH,
+        );
+        add(tick);
+      }
+      const velocityLabel = label("Velocity", LEFT - 0.06, BOTTOM - 0.13, 0.25);
+      velocityLabel.position.z = Z + MAX_NOTE_DEPTH / 2;
+      add(velocityLabel);
       for (let beat = 0; beat <= 16; beat++) {
         const line = new Mesh(
           new BoxGeometry(0.002, ROW * 36, 0.002),
@@ -208,8 +267,10 @@ export function sequencerSystem(session: Session) {
           roughness: 0.65,
           emissive: 0x000000,
         });
+        const depth = noteDepth(note.velocity);
+        const centerZ = Z + depth / 2;
         const mesh = new Mesh(
-          new BoxGeometry(width, ROW * 0.85, 0.045),
+          new BoxGeometry(width, ROW * 0.85, depth),
           material,
         );
         mesh.position.set(
@@ -217,13 +278,16 @@ export function sequencerSystem(session: Session) {
             ((start - session.pageTick) / session.pageSize) * WIDTH +
             width / 2,
           BOTTOM + (note.pitch - session.basePitch + 0.5) * ROW,
-          Z,
+          centerZ,
         );
         mesh.name = `Note ${note.id} pitch ${note.pitch}`;
         mesh.userData.noteId = note.id;
         mesh.userData.anchorX = mesh.position.x;
         mesh.userData.anchorY = mesh.position.y;
-        const entity = this.world.createTransformEntity(mesh);
+        const entity = this.world.createTransformEntity(
+          mesh,
+          this.contentEntity,
+        );
         entity
           .addComponent(NoteView)
           .addComponent(RayInteractable)
@@ -231,8 +295,8 @@ export function sequencerSystem(session: Session) {
             rotate: false,
             scale: false,
             movementMode: MovementMode.MoveFromTarget,
-            translateMin: [LEFT, BOTTOM, Z],
-            translateMax: [LEFT + WIDTH, BOTTOM + ROW * 36, Z],
+            translateMin: [LEFT, BOTTOM, centerZ],
+            translateMax: [LEFT + WIDTH, BOTTOM + ROW * 36, centerZ],
           });
         const select = () => {
           session.store.select(note.id);
@@ -288,6 +352,13 @@ export function sequencerSystem(session: Session) {
         }
       }
       if (this.dirty && this.dragging.size === 0) {
+        this.viewPivot.rotation.x =
+          session.view === "velocity" ? -Math.PI / 2 : 0;
+        const panel = this.world.requireSceneObject<UIKitMLAsset>("transport");
+        for (const view of ["notes", "velocity"] as const)
+          panel.requireElementById(`view-${view}`).setProperties({
+            backgroundOpacity: session.view === view ? 0.25 : 0.04,
+          });
         const key = `${session.pageTick}:${session.basePitch}:${session.trackId}:${session.store.project.ppq}`;
         if (this.revision !== session.store.revision || key !== this.viewKey)
           this.rebuild();

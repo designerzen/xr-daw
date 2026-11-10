@@ -1,0 +1,28 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build", "typecheck"],
+      "outputs": ["dist/**"],
+      "env": ["NODE_ENV", "VITE_*"],
+      "inputs": ["$TURBO_DEFAULT$", "!artifacts/**", "!.iwsdk/**", "!dist/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck"],
+      "outputs": [],
+      "inputs": ["$TURBO_DEFAULT$", "!artifacts/**", "!.iwsdk/**", "!dist/**"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "inputs": ["$TURBO_DEFAULT$", "!artifacts/**", "!.iwsdk/**", "!dist/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "passThroughEnv": ["IWSDK_*", "VITE_*"]
+    },
+    "serve": { "cache": false, "persistent": true },
+    "format": { "cache": false }
+  }
+}

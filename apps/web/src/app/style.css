@@ -1,0 +1,369 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #e6ebf2;
+  background: #10151f;
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+#scene-container {
+  position: fixed;
+  inset: 0;
+}
+#scene-container canvas {
+  display: block;
+  touch-action: none;
+}
+#controls {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+button,
+select,
+input,
+summary,
+.file-button {
+  font: inherit;
+}
+button,
+select,
+summary,
+.file-button {
+  color: inherit;
+  cursor: pointer;
+}
+button {
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+button:hover,
+summary:hover,
+.file-button:hover {
+  background: #ffffff0d;
+}
+button:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+button:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+select:focus-visible,
+.file-button:focus-within {
+  outline: 2px solid #a3d2c5;
+  outline-offset: 3px;
+}
+.app-header {
+  position: absolute;
+  top: 24px;
+  left: 30px;
+  right: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.identity {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  min-width: 0;
+}
+h1 {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  white-space: nowrap;
+  margin: 0;
+}
+#project-name {
+  font-size: 12px;
+  color: #8996a9;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  max-width: 40vw;
+}
+nav {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  pointer-events: auto;
+}
+#enter-vr {
+  border: 1px solid #ffffff25;
+  border-radius: 20px;
+  padding: 9px 18px;
+  background: #141c27bb;
+  font-size: 12px;
+}
+.transport,
+.note-inspector {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #ffffff12;
+  border-radius: 36px;
+  background: #151c27e8;
+  backdrop-filter: blur(18px);
+  pointer-events: auto;
+  box-shadow: 0 8px 28px #0003;
+}
+.transport {
+  bottom: 26px;
+}
+.view-navigation {
+  position: absolute;
+  top: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #ffffff12;
+  border-radius: 20px;
+  background: #151c27e8;
+}
+.view-navigation button {
+  border-radius: 16px;
+}
+.view-navigation button[aria-pressed="true"] {
+  color: #17251f;
+  background: #d8e8e2;
+}
+.icon-button,
+summary {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  border-radius: 50%;
+}
+svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.primary {
+  background: #d8e8e2;
+  color: #17251f;
+}
+.primary:hover {
+  background: #eef6f2;
+}
+.divider {
+  width: 1px;
+  height: 18px;
+  background: #ffffff14;
+  margin: 0 3px;
+}
+#track {
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  width: 116px;
+  padding: 6px;
+  text-overflow: ellipsis;
+}
+#track option {
+  background: #151c27;
+}
+.tempo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 6px;
+}
+#tempo {
+  width: 40px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  text-align: right;
+  appearance: textfield;
+}
+#tempo::-webkit-inner-spin-button,
+#tempo::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+.tempo span {
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: #7f8b9e;
+}
+.menu {
+  position: relative;
+  pointer-events: auto;
+}
+summary {
+  list-style: none;
+  cursor: pointer;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+.menu[open] > summary {
+  background: #ffffff12;
+}
+.menu-panel {
+  position: absolute;
+  width: 220px;
+  padding: 10px;
+  border: 1px solid #ffffff14;
+  border-radius: 12px;
+  background: #17202df5;
+  backdrop-filter: blur(22px);
+  box-shadow: 0 12px 40px #0005;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.file-menu .menu-panel {
+  top: 44px;
+  right: 0;
+}
+.edit-menu .menu-panel {
+  bottom: 48px;
+  right: -8px;
+}
+.menu-panel button,
+.file-button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.file-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.menu-row button {
+  text-align: center;
+}
+.menu-panel label {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+}
+.menu-panel hr {
+  width: calc(100% - 16px);
+  border: 0;
+  border-top: 1px solid #ffffff10;
+  margin: 5px auto;
+}
+.shortcut-hint {
+  font-size: 10px;
+  color: #8190a5;
+  line-height: 1.8;
+  padding: 4px 10px;
+  margin: 0;
+}
+input[type="range"] {
+  width: 90px;
+  accent-color: #b3d4c9;
+}
+.note-inspector {
+  bottom: 92px;
+  border-radius: 12px;
+  gap: 4px;
+  padding: 5px 10px;
+}
+.note-inspector[hidden] {
+  display: none;
+}
+#note-label {
+  font-size: 12px;
+  padding: 0 7px;
+  color: #aab9cc;
+}
+.status {
+  position: absolute;
+  left: 50%;
+  bottom: 153px;
+  transform: translateX(-50%);
+  font-size: 12px;
+  border-radius: 8px;
+  padding: 10px 16px;
+  background: #2e2227ee;
+  opacity: 0;
+  pointer-events: none;
+  max-width: 80vw;
+}
+.status.visible {
+  opacity: 1;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+#controls.immersive {
+  display: none;
+}
+@media (max-width: 540px) {
+  .app-header {
+    top: 18px;
+    left: 18px;
+    right: 18px;
+  }
+  .identity {
+    display: block;
+  }
+  #project-name {
+    display: block;
+    margin-top: 5px;
+    max-width: 48vw;
+    font-size: 10px;
+  }
+  nav {
+    gap: 4px;
+  }
+  #enter-vr {
+    padding: 8px 12px;
+  }
+  .transport {
+    bottom: 18px;
+    gap: 4px;
+    padding: 6px;
+  }
+  #track {
+    width: 88px;
+  }
+  .tempo {
+    margin: 0 2px;
+  }
+  .note-inspector {
+    bottom: 80px;
+  }
+}

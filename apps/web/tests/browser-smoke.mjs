@@ -8,7 +8,10 @@ export default async function run({ frame, page, workspaceRoot }) {
   const onError = (error) => errors.push(error.message);
   page.on("pageerror", onError);
   await page.setViewportSize({ width: 1440, height: 1200 });
-  await frame.goto(frame.url());
+  await frame.goto(frame.url(), {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
   await frame.waitForFunction(
     () => document.querySelector("#status")?.textContent.includes("Ready"),
     null,
@@ -26,23 +29,80 @@ export default async function run({ frame, page, workspaceRoot }) {
       pitch,
       start: i * 480,
       duration: 360,
-      velocity: 0.7,
+      velocity: [0.25, 0.5, 1][i],
     })),
   };
   const loadProject = async (value, name = "smoke.xrdaw.json") => {
-    await frame
-      .locator("#open")
-      .setInputFiles({
-        name,
-        mimeType: "application/json",
-        buffer: Buffer.from(JSON.stringify(value)),
-      });
+    await frame.locator("#open").setInputFiles({
+      name,
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify(value)),
+    });
   };
+  const options = async () => {
+    if (!(await frame.locator("#edit-menu").evaluate((menu) => menu.open)))
+      await frame.locator("#edit-menu > summary").click();
+  };
+  const files = async () => {
+    if (!(await frame.locator("#project-menu").evaluate((menu) => menu.open)))
+      await frame.locator("#project-menu > summary").click();
+  };
+  assert.equal(await frame.locator("#note-inspector").isVisible(), false);
+  assert.equal(
+    await frame.locator("#save").isVisible(),
+    false,
+    "file tools are tucked away",
+  );
+  assert.equal(
+    await frame.locator("#add").isVisible(),
+    false,
+    "editing options are tucked away",
+  );
+  const viewport = await frame.evaluate(() => ({
+    canvas: document.querySelector("#scene-container").getBoundingClientRect()
+      .height,
+    height: innerHeight,
+  }));
+  assert.equal(
+    viewport.canvas,
+    viewport.height,
+    "the scene uses the full viewport",
+  );
   await loadProject(project);
   await frame.waitForFunction(() =>
     document
-      .querySelector("#project-name")
+      .querySelector("#project-summary")
       .textContent.includes("Browser smoke · 3 notes"),
+  );
+  await frame.waitForFunction(() =>
+    window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName(
+      "Note smoke-2 pitch 67",
+    ),
+  );
+  const volumes = await frame.evaluate(() => {
+    const world = window.FRAMEWORK_MCP_RUNTIME.world;
+    return [60, 64, 67].map((pitch, i) => {
+      const mesh = world.scene.getObjectByName(
+        `Note smoke-${i} pitch ${pitch}`,
+      );
+      return {
+        depth: mesh.geometry.parameters.depth,
+        width: mesh.geometry.parameters.width,
+        rear: mesh.position.z - mesh.geometry.parameters.depth / 2,
+      };
+    });
+  });
+  assert.deepEqual(
+    volumes.map((note) => note.depth),
+    [0.2, 0.4, 0.8],
+  );
+  assert.ok(
+    volumes.every((note) => Math.abs(note.rear + 2.1) < 1e-6),
+    "velocity depths share a baseline",
+  );
+  assert.ok(
+    volumes.every((note) => note.width === volumes[0].width),
+    "velocity does not change duration geometry",
   );
   const notePoint = async (id) => {
     return frame.evaluate((id) => {
@@ -67,10 +127,49 @@ export default async function run({ frame, page, workspaceRoot }) {
   await frame.waitForFunction(() =>
     document.querySelector("#selection").textContent.includes("MIDI 60"),
   );
+  await frame.locator("#velocity").evaluate((input) => {
+    input.value = "0.75";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await frame.waitForFunction(() => {
+    const mesh = window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName(
+      "Note smoke-0 pitch 60",
+    );
+    return (
+      Math.abs(mesh.geometry.parameters.depth - 0.6) < 1e-6 &&
+      Math.abs(mesh.position.z - mesh.geometry.parameters.depth / 2 + 2.1) <
+        1e-6
+    );
+  });
+  const selectionBeforeView = await frame.locator("#selection").textContent();
+  await frame.locator("#view-velocity").click();
+  await frame.waitForFunction(() => {
+    const world = window.FRAMEWORK_MCP_RUNTIME.world;
+    return (
+      Math.abs(
+        world.scene.getObjectByName("Sequencer view").rotation.x + Math.PI / 2,
+      ) < 1e-6
+    );
+  });
+  assert.equal(
+    await frame.locator("#view-velocity").getAttribute("aria-pressed"),
+    "true",
+  );
+  assert.equal(
+    await frame.locator("#selection").textContent(),
+    selectionBeforeView,
+  );
+  await frame.locator("#view-notes").click();
+  await frame.waitForFunction(
+    () =>
+      window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName("Sequencer view")
+        .rotation.x === 0,
+  );
   await frame.locator("#longer").click();
   await frame.waitForFunction(() =>
     document.querySelector("#selection").textContent.includes("1.00 long"),
   );
+  await options();
   await frame.locator("#undo").click();
   await frame.waitForFunction(() =>
     document.querySelector("#selection").textContent.includes("0.75 long"),
@@ -99,22 +198,33 @@ export default async function run({ frame, page, workspaceRoot }) {
   const edited = await frame.locator("#selection").textContent();
   await frame.locator("#play").click();
   await frame.waitForFunction(
-    () => document.querySelector("#play").textContent === "Pause",
+    () =>
+      document.querySelector("#play").getAttribute("aria-label") === "Pause",
   );
   await frame.waitForFunction(
     () => !document.querySelector("#position").textContent.endsWith("Beat 1.0"),
   );
+  await frame.locator("#view-velocity").click();
+  assert.equal(
+    await frame.locator("#play").getAttribute("aria-label"),
+    "Pause",
+  );
+  assert.ok(
+    !(await frame.locator("#position").textContent()).endsWith("Beat 1.0"),
+  );
+  await frame.locator("#view-notes").click();
   await frame.locator("#stop").click();
   await frame.waitForFunction(() =>
     document.querySelector("#position").textContent.endsWith("Beat 1.0"),
   );
+  await options();
   await frame.locator("#add").click();
   await frame.waitForFunction(() =>
-    document.querySelector("#project-name").textContent.includes("4 notes"),
+    document.querySelector("#project-summary").textContent.includes("4 notes"),
   );
   await frame.locator("#delete").click();
   await frame.waitForFunction(() =>
-    document.querySelector("#project-name").textContent.includes("3 notes"),
+    document.querySelector("#project-summary").textContent.includes("3 notes"),
   );
   await frame.waitForFunction(() =>
     document.querySelector("#status").textContent.includes("Saved"),
@@ -123,6 +233,7 @@ export default async function run({ frame, page, workspaceRoot }) {
   const directory = path.join(workspaceRoot, "artifacts");
   await mkdir(directory, { recursive: true });
   const download = page.waitForEvent("download");
+  await files();
   await frame.locator("#save").click();
   const saved = await download;
   const projectPath = path.join(directory, "smoke.xrdaw.json");
@@ -134,37 +245,49 @@ export default async function run({ frame, page, workspaceRoot }) {
     "mouse drag must persist musical time",
   );
   assert.equal(savedProject.notes[0].duration, 480);
+  assert.equal(
+    savedProject.notes[0].velocity,
+    0.75,
+    "time/pitch dragging preserves velocity",
+  );
   // Invalid imports leave the current project intact.
   await loadProject({ version: 99 });
   await frame.waitForFunction(() =>
     document.querySelector("#status").textContent.includes("invalid"),
   );
   assert.match(
-    await frame.locator("#project-name").textContent(),
+    await frame.locator("#project-summary").textContent(),
     /Browser smoke · 3 notes/,
   );
-  await frame.goto(frame.url());
+  await frame.goto(frame.url(), {
+    waitUntil: "domcontentloaded",
+    timeout: 60000,
+  });
   await frame.waitForFunction(
     () => document.querySelector("#status")?.textContent.includes("Ready"),
     null,
     { timeout: 60000 },
   );
   assert.match(
-    await frame.locator("#project-name").textContent(),
+    await frame.locator("#project-summary").textContent(),
     /Browser smoke · 3 notes/,
   );
+  await files();
   await frame.locator("#preset").click();
   await frame.waitForFunction(() =>
-    document.querySelector("#project-name").textContent.startsWith("Stories"),
+    document
+      .querySelector("#project-summary")
+      .textContent.startsWith("Stories"),
   );
-  const imported = await frame.locator("#project-name").textContent();
+  const imported = await frame.locator("#project-summary").textContent();
   await loadProject(savedProject);
   await frame.waitForFunction(() =>
     document
-      .querySelector("#project-name")
+      .querySelector("#project-summary")
       .textContent.startsWith("Browser smoke"),
   );
   const wavDownload = page.waitForEvent("download");
+  await files();
   await frame.locator("#export").click();
   const wav = await wavDownload;
   const wavPath = path.join(directory, "smoke.wav");

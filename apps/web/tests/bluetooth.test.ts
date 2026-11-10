@@ -6,7 +6,11 @@ import * as Bluetooth from "../src/audio/midi/midi-connection-bluetooth.js";
 // @ts-expect-error Retained JavaScript module has no declaration file.
 import MIDIConnection from "../src/audio/midi/midi-connection.js";
 
-const { default: BluetoothMIDIConnection, MIDI_SERVICE_UUID, MIDI_CHARACTERISTIC_UUID } = Bluetooth;
+const {
+  default: BluetoothMIDIConnection,
+  MIDI_SERVICE_UUID,
+  MIDI_CHARACTERISTIC_UUID,
+} = Bluetooth;
 
 class Characteristic extends EventTarget {
   properties = { writeWithoutResponse: true, write: false };

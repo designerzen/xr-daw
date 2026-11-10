@@ -1,0 +1,41 @@
+{
+  "name": "@xr-daw/web",
+  "private": true,
+  "author": "designerzen <designerzen@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "dev:runtime": "vite",
+    "dev:down": "iwsdk dev down",
+    "dev:status": "iwsdk dev status",
+    "build": "vite build",
+    "serve": "vite preview --host",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "format": "prettier --write src/app tests",
+    "test:browser": "iwsdk browser run tests/browser-smoke.mjs --timeout 110000",
+    "test:xr": "iwsdk browser run tests/xr-enter.mjs"
+  },
+  "dependencies": {
+    "@iwsdk/core": "1.0.1",
+    "@pmndrs/uikit": "1.0.74",
+    "@pmndrs/uikit-horizon": "1.0.74",
+    "@pmndrs/uikit-lucide": "1.0.74",
+    "three": "npm:super-three@0.181.0",
+    "midi-file": "1.2.4",
+    "webmidi": "^3.1.12"
+  },
+  "devDependencies": {
+    "@iwsdk/cli": "1.0.1",
+    "@iwsdk/vite-plugin-dev": "1.0.1",
+    "@types/three": "^0.181.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.7.3",
+    "vite": "^7.1.4",
+    "vite-plugin-static-copy": "^3.1.0",
+    "tsx": "^4.20.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

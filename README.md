@@ -1,91 +1,110 @@
 # XR DAW
 
-A browser-based spatial MIDI sequencer built with **TypeScript, Meta Immersive Web SDK (IWSDK), Three.js, and Web Audio**. The application has no React components or React rendering layer.
+An immersive extended reality digital audio workstation for exploring and editing music in 3D. Open a MIDI file, shape notes in space, and listen as you work—on a desktop or in a VR headset.
 
-Original project: winner of Most Innovative App at MuseHub 2024.
+Winner of **Most Innovative App at MuseHub 2024**.
 
-## Run
+[Try XR DAW online](https://designerzen.github.io/xr-daw/)
 
-Use Node.js 22.12+ (Node 24 LTS recommended).
+## Making music
+
+Start with the included song or open a `.mid` or `.midi` file from your device. Notes encode musical data in three dimensions: horizontal position represents time, vertical position represents pitch, length represents duration, and depth represents velocity. Louder notes extend farther from a shared rear plane, so you can compare their dynamics spatially.
+
+- Drag notes with a mouse or point and grab with a VR controller or hand ray. Edits snap to sixteenth notes.
+- Use the transport to play, pause, and stop. Choose a track and adjust the tempo as you listen.
+- Switch between **Notes** and **Velocity** to view the same 3D notes across pitch or depth. Switching views preserves your selection and playback position.
+- Select a note to change its length or velocity, audition it, or delete it. Add notes and undo or redo your edits from the editing menu.
+- Open the project menu to save a portable project or export a stereo WAV file.
+
+Projects autosave in your browser on your device. Download a project file to keep a copy or move it to another computer. Reopening that file restores its notes, tracks, levels, and tempo map.
+
+Playback uses a polyphonic triangle synthesizer. MIDI formats 0 and 1 are supported, including multiple tracks and tempo changes. Bar labels use 4/4 time. WAV export supports projects up to ten minutes long.
+
+## Virtual reality
+
+Open the app in a browser with WebXR support and choose **Enter VR**. The timeline stays in front of you, with a compact transport underneath it. Point at a note to select it, then hold and move it to change its time or pitch.
+
+The transport menu provides track selection, note editing, and timeline navigation. Choose **Exit** to return to the desktop view.
+
+## Keyboard controls
+
+| Key | Action |
+| --- | --- |
+| Space | Play or pause |
+| Left / right | Move the selected note in time |
+| Up / down | Change the selected note's pitch |
+| Shift + left / right | Change note duration |
+| Shift + up / down | Transpose by an octave |
+| Delete / Backspace | Delete the selected note |
+| Ctrl/Cmd + Z | Undo |
+| Ctrl/Cmd + Shift + Z | Redo |
+
+Shortcuts apply while the scene has focus.
+
+## Local development
+
+Install **Node.js 22.12 or later** and npm, then clone the repository:
 
 ```sh
+git clone https://github.com/designerzen/xr-daw.git
+cd xr-daw
 npm ci
 npm run dev
 ```
 
-Open `https://localhost:8081/`. IWSDK uses a self-signed development certificate, so a browser may ask you to accept it. Its managed development browser and IWER (the desktop XR emulator) are available for testing without a headset; Chromium is downloaded on first use. Production builds do not include the emulator.
+Open `https://localhost:8081/`. The development server uses a self-signed HTTPS certificate; your browser may ask you to accept it.
 
-On a headset, open the HTTPS network URL printed by Vite. Alternatively, connect a Quest by USB and use `adb reverse tcp:8081 tcp:8081`, then open `https://localhost:8081/` on the headset. The app starts in desktop mode; **Enter VR** requests an immersive session directly from your click.
-
-## What works
-
-- MIDI type 0/1 import, including simultaneous tracks and tempo changes.
-- Four-bar piano-roll pages, track selection, and octave navigation.
-- Mouse or controller/hand-ray note dragging, snapped to sixteenths.
-- Add/delete notes, edit duration and velocity, audition, undo and redo.
-- Polyphonic triangle synthesis, play/pause/stop, play from the visible page, and project looping.
-- Track gain/mute, tempo scaling, IndexedDB autosave, downloadable JSON projects, and stereo PCM WAV export.
-- A world-space UIKitML transport/editor panel in VR.
-
-Select a note, then use arrow keys to change time/pitch. Shift + left/right changes duration; Shift + up/down transposes an octave. Delete removes a selected note. Space toggles playback; Ctrl/Cmd + Z undoes, and Shift + Ctrl/Cmd + Z redoes. Keyboard shortcuts are inactive while a form control has focus.
-
-Autosave stores the most recent project in this browser on this device. Download a project to keep a portable copy. Opening another project replaces the current session. WAV export renders the built-in synth and respects track gain/mute.
-
-## Architecture
-
-- `src/app/project.ts`: versioned musical model, tick/second tempo conversion, validation, edit history.
-- `src/app/midi.ts`: MIDI adapter using `midi-file`; each track maintains its own absolute tick position.
-- `src/app/audio.ts`: framework-independent audio graph, worker-driven lookahead scheduler, offline WAV rendering.
-- `src/app/session.ts`: shared editing/transport commands and viewport state.
-- `src/app/sequencer-system.ts`: IWSDK entities, ray interactions, drag commits, and timeline presentation.
-- `src/app/main.ts`: plain HTML desktop controls and app lifecycle.
-- `public/ui/transport.uikitml`: spatial controls. `iwsdk.config.json` configures the world and manifest.
-
-Musical times use ticks with an explicit PPQ. Mesh coordinates are derived from the project; dragging commits one edit on release. Audio uses `AudioContext.currentTime` and native audio nodes rather than the rendering loop. Custom DSP can be added behind this engine interface using AudioWorklet/WASM when needed.
-
-IWSDK and its Three.js alias are pinned together. IWSDK uses some libraries with transitive React dependencies, and IWER's development UI uses React internally; app code does not depend on React or React Three Fiber.
-
-The React prototype, its hooks, and the old audio bus have been removed. The active app is entirely under `src/app/`. Framework-independent audio/MIDI modules remain in `src/audio/`, with acoustic assets in `src/assets/audio/acoustics/`, for further integration. These retained modules do not automatically become part of the active audio graph.
-
-The reverb helper retains its generated-buffer return value. WebMIDI and Electron connection names are preserved. `src/audio/midi/midi-connection-bluetooth.js` is a standalone Web Bluetooth transport: call `connect()` directly from a user gesture, set `onPacket` to receive copied raw BLE-MIDI packets, use `writePacket()` for already-framed packets, and call `disconnect()` for cleanup. It does not decode BLE timestamps/MIDI messages or route hardware into the DAW yet. The old duplicate classes and page-specific demo scripts have been removed. See [Chrome's Web Bluetooth guide](https://developer.chrome.com/docs/capabilities/bluetooth) for browser setup and the GATT APIs used by this transport. Physical Bluetooth hardware is not covered by the mocked transport tests.
-
-## Checks
+The repository uses npm workspaces and Turborepo. The web application lives in `apps/web`, including its source, assets, spatial UI, and tests. Run commands from the repository root:
 
 ```sh
-npm test
+npm test             # Run unit tests
+npm run typecheck    # Check TypeScript
+npm run build        # Type-check and build the app
+npm run check        # Run tests, type checks, and the build
+npm run serve        # Preview the production build
+npm run format       # Format application code and tests
+```
+
+Turborepo caches successful builds, tests, and type checks. Development servers and formatting tasks run without caching.
+
+### Developing with a headset
+
+Connect the headset to the same network as your computer and open the HTTPS network address printed by the development server.
+
+For a Quest connected by USB, enable developer mode and forward the server port:
+
+```sh
+adb reverse tcp:8081 tcp:8081
+```
+
+Then open `https://localhost:8081/` in the headset browser.
+
+### Developing without a headset
+
+IWSDK includes IWER, a browser-based XR emulator. It lets you move an emulated headset and controllers while developing on your computer. Its managed Chromium browser is downloaded on first use. Disable other WebXR emulator extensions to avoid conflicting runtimes.
+
+See [development and testing](docs/development.md) for browser automation and XR checks.
+
+## Build and deploy
+
+```sh
 npm run build
-npm run serve
 ```
 
-The build runs TypeScript checking before Vite. Tests cover tempo maps, MIDI tracks/overlaps, every bundled MIDI preset, history/validation, audio lookahead/seek/cancellation, and WAV encoding.
+Upload the contents of `apps/web/dist` to a static host. The build supports hosting under a project subpath.
 
-For a live desktop smoke test, enable IWSDK's local browser automation when starting development. In PowerShell:
+GitHub Actions runs tests and builds the application when commits are pushed to `main`, then deploys the output to GitHub Pages. To use this in a fork, enable **GitHub Actions** as the Pages source in the repository settings.
 
-```powershell
-$env:IWSDK_DEV_HEADLESS = 'true'
-$env:IWSDK_DEV_ALLOW_BROWSER_AUTOMATION = 'true'
-npm run dev
-```
+## How it works
 
-In another terminal:
+TypeScript and IWSDK manage the Three.js scene, spatial controls, and WebXR input. A shared musical project describes tracks, notes, and tempo changes. Both desktop and immersive controls edit that same project.
 
-```sh
-npx @iwsdk/cli browser run tests/browser-smoke.mjs --timeout 110000
-npx @iwsdk/cli browser run tests/xr-enter.mjs
-npx @iwsdk/cli xr status
-npx @iwsdk/cli dev down
-```
+Web Audio schedules synthesis against the audio clock, independently of the scene's frame rate. Offline rendering turns the project into a WAV file, while IndexedDB stores the local autosave.
 
-The smoke test exercises real mouse editing, undo/redo, playback, autosave/reload, preset import, project download, and WAV export. It writes temporary evidence under ignored `artifacts/`. Use IWSDK's XR tools to verify controller interactions in an active emulated session; a desktop screenshot alone does not verify VR input.
+## Contributing
 
-## Current limits
-
-This is the first functional migration, not a complete recording DAW. All tracks currently use the same triangle synth. MIDI programs, sustain/controller events, percussion kits, and time-signature changes are not interpreted; bar labels use 4/4. SMPTE and independent type-2 MIDI sequences are rejected explicitly. WAV export is limited to ten minutes. Audio recording, external MIDI devices, plugin hosting, automation lanes, sample clips, and audio asset persistence are future engine features.
-
-Only the selected track, four bars, and a 36-semitone range are rendered. Very dense MIDI pages still use individual editable meshes and need instancing/profiling before large sessions. Headset performance, physical hand/controller ergonomics, audio latency, and browser-specific support require device testing.
-
-GitHub Actions uses Node 22, `npm ci`, tests, and the Vite build. The output in `dist/` supports project-subpath hosting. No deployment is performed by local build commands.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+[MIT](LICENSE).
