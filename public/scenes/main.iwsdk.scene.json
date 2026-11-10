@@ -1,0 +1,14 @@
+{
+  "version": "iwsdk.scene.v1",
+  "units": "meters",
+  "resources": {},
+  "nodes": [
+    {
+      "id": "transport",
+      "name": "Transport",
+      "content": { "type": "asset", "asset": "transport" },
+      "transform": { "position": [0, 0.55, -1.8] },
+      "components": { "RayInteractable": {} }
+    }
+  ]
+}
