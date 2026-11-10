@@ -395,6 +395,7 @@ export const createCustomReverb = async ( audioContext, options = DEFAULT_CUSTOM
 	reverb.setOptions = async (options) => {
 		// reverb = await createCustomReverb(audioContext, options)
 		reverb.node.buffer = await generateCustomImpulseResponse(audioContext, options)
+		return reverb.node.buffer
 	}
 	return reverb
 }

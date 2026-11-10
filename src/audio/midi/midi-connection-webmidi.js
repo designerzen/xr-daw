@@ -37,6 +37,8 @@ export const testForWebMIDI = () => navigator.requestMIDIAccess === undefined ? 
  */
 export default class WebMIDIConnection extends MIDIConnection{
 
+	static TYPE = "WebMIDI Bridge"
+
 	midi 
 	midiChannel
 	useMPE = false
@@ -57,7 +59,7 @@ export default class WebMIDIConnection extends MIDIConnection{
 	 */
 	constructor( sysex=true, mpe=false )
 	{
-		super()
+		super( WebMIDIConnection.TYPE )
 		this.useMPE = mpe
 		this.useSysex = sysex
 	}

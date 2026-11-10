@@ -45,7 +45,9 @@ Musical times use ticks with an explicit PPQ. Mesh coordinates are derived from 
 
 IWSDK and its Three.js alias are pinned together. IWSDK uses some libraries with transitive React dependencies, and IWER's development UI uses React internally; app code does not depend on React or React Three Fiber.
 
-The previous React prototype and existing audio/MIDI experiments remain in `src/` for reference, including in-progress changes. They are excluded from the new entry point and TypeScript build. The active app is entirely under `src/app/`. Existing synth/effect experiments have not been silently substituted into the new engine.
+The React prototype, its hooks, and the old audio bus have been removed. The active app is entirely under `src/app/`. Framework-independent audio/MIDI modules remain in `src/audio/`, with acoustic assets in `src/assets/audio/acoustics/`, for further integration. These retained modules do not automatically become part of the active audio graph.
+
+The reverb helper retains its generated-buffer return value. WebMIDI and Electron connection names are preserved. `src/audio/midi/midi-connection-bluetooth.js` is a standalone Web Bluetooth transport: call `connect()` directly from a user gesture, set `onPacket` to receive copied raw BLE-MIDI packets, use `writePacket()` for already-framed packets, and call `disconnect()` for cleanup. It does not decode BLE timestamps/MIDI messages or route hardware into the DAW yet. The old duplicate classes and page-specific demo scripts have been removed. See [Chrome's Web Bluetooth guide](https://developer.chrome.com/docs/capabilities/bluetooth) for browser setup and the GATT APIs used by this transport. Physical Bluetooth hardware is not covered by the mocked transport tests.
 
 ## Checks
 
