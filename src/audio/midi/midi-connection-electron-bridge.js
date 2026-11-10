@@ -9,6 +9,8 @@ import MIDIConnection from "./midi-connection"
  */
 export default class MIDIBridgeConnection extends MIDIConnection{
 	
+	static TYPE = "Electron MIDI Bridge"
+
 	connected = false
 	
 	get inputs(){
@@ -40,7 +42,7 @@ export default class MIDIBridgeConnection extends MIDIConnection{
 	}
 
 	constructor(){
-		super()
+		super(MIDIBridgeConnection.TYPE)
 	}
 
 	async connect( port=0 ){
@@ -79,7 +81,7 @@ export default class MIDIBridgeConnection extends MIDIConnection{
 		//console.log("MIDIBridgeConnection:window.electron",window.electron)
 		return { 
 			status:"Electron MIDI Bridge created", 
-			inputs:this.inputs, 
+			inputs:this.inputs,
 			outputs:this.outputs
 		} 
 	}
