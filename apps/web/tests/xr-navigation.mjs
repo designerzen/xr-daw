@@ -25,13 +25,11 @@ export default async function run({ frame }) {
       velocity: 0.5,
     })),
   };
-  await frame
-    .locator("#open")
-    .setInputFiles({
-      name: "xr-navigation.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(JSON.stringify(project)),
-    });
+  await frame.locator("#open").setInputFiles({
+    name: "xr-navigation.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(project)),
+  });
   await frame.waitForFunction(
     () =>
       document.querySelector("#project-name").textContent === "XR navigation",

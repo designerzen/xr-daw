@@ -1,14 +1,18 @@
-import { World, VisibilityState } from "@iwsdk/core";
+import { SessionMode, World, VisibilityState } from "@iwsdk/core";
 import projectOptions from "virtual:iwsdk-project";
 import { encodeWav, exportWav } from "./audio";
 import { importMidi } from "./midi";
 import { restoreProject, saveProject } from "./persistence";
 import { demoProject, projectEnd, validateProject } from "./project";
-import { Session } from "./session";
-import { sequencerSystem } from "./sequencer-system";
+import { ALL_TRACKS, Session } from "./session";
+import { BOARD, sequencerSystem } from "./sequencer-system";
 import { waveformSystem } from "./waveform-system";
 import type { VinylCondition } from "./vinyl-playback";
-import { SceneNavigation } from "./scene-navigation";
+import {
+  CAMERA_MODES,
+  SceneNavigation,
+  type CameraMode,
+} from "./scene-navigation";
 import "./style.css";
 
 function download(blob: Blob, name: string) {
@@ -51,7 +55,8 @@ root.innerHTML = `
           <button id="save">Save project</button><button id="export">Export WAV</button>
         </div>
       </details>
-      <button id="enter-vr" disabled>Enter VR</button>
+      <button id="enter-ar" class="enter-xr" disabled hidden>Enter AR</button>
+      <button id="enter-vr" class="enter-xr" disabled>Enter VR</button>
     </nav>
   </header>
   <nav class="view-navigation" aria-label="View">
@@ -60,6 +65,11 @@ root.innerHTML = `
     <button id="view-waveform" type="button" aria-pressed="false" hidden>Waveform</button>
   </nav>
   <nav class="scene-tools" aria-label="Scene navigation">
+    <select id="camera-mode" aria-label="Camera" title="Camera: 3D perspective, or flat and oblique views that keep every bar and pitch the same size">${Object.entries(
+      CAMERA_MODES,
+    )
+      .map(([value, mode]) => `<option value="${value}">${mode.label}</option>`)
+      .join("")}</select>
     <button id="camera-look" aria-pressed="false" title="Look mode: drag anywhere to rotate the scene">Look</button>
     ${iconButton("camera-reset", "Reset view", "reset")}
     ${iconButton("camera-in", "Zoom in", "longer")}${iconButton("camera-out", "Zoom out", "shorter")}
@@ -159,6 +169,44 @@ async function start() {
     element<HTMLDivElement>("scene-container"),
     projectOptions,
   );
+  // Keep the music clear of the controls floating over the canvas.
+  const clearArea = () => {
+    const bounds = world.renderer.domElement.getBoundingClientRect();
+    const visible = (selector: string) => {
+      const found = root.querySelector<HTMLElement>(selector);
+      return found && found.offsetParent !== null
+        ? found.getBoundingClientRect()
+        : null;
+    };
+    const tools = visible(".scene-tools");
+    return {
+      top:
+        Math.max(
+          ...[".app-header", ".view-navigation"].map(
+            (selector) => visible(selector)?.bottom ?? bounds.top,
+          ),
+        ) -
+        bounds.top +
+        8,
+      bottom:
+        bounds.bottom -
+        Math.min(
+          ...[".transport", "#timeline-navigation"].map(
+            (selector) => visible(selector)?.top ?? bounds.bottom,
+          ),
+        ) +
+        8,
+      right: tools ? bounds.right - tools.left + 8 : 16,
+      left: 16,
+    };
+  };
+  const navigation = new SceneNavigation(
+    world.camera,
+    world.renderer.domElement,
+    world.scene,
+    clearArea,
+    BOARD.z,
+  );
   const resizeViewport = () => {
     if (world.session) return;
     const container = element("scene-container");
@@ -171,14 +219,25 @@ async function start() {
     );
     world.camera.updateProjectionMatrix();
     world.renderer.setSize(width, height);
+    navigation.fit();
   };
   window.addEventListener("resize", resizeViewport);
   resizeViewport();
-  const navigation = new SceneNavigation(
-    world.camera,
-    world.renderer.domElement,
-    world.scene,
-  );
+  const setCameraMode = (mode: CameraMode) => {
+    navigation.setMode(mode);
+    element<HTMLSelectElement>("camera-mode").value = mode;
+    // Parallel views look straight at the music, so there is nothing to rotate.
+    button("camera-look").disabled = navigation.parallel;
+    if (navigation.parallel && navigation.look) button("camera-look").click();
+  };
+  // ?camera=front|cabinet|cavalier|perspective overrides the remembered choice.
+  let initialCamera: string | null = null;
+  try {
+    initialCamera =
+      new URLSearchParams(location.search).get("camera") ??
+      localStorage.getItem("xr-daw.camera");
+  } catch {}
+  let lastView = session.view;
   world.registerSystem(sequencerSystem(session));
   world.registerSystem(waveformSystem(session));
   let lastRevision = session.store.revision;
@@ -188,6 +247,10 @@ async function start() {
 
   function sync() {
     const waveform = session.view === "waveform";
+    if (session.view !== lastView) {
+      lastView = session.view;
+      navigation.fit();
+    }
     root.classList.toggle("audio-mode", waveform);
     element("vinyl-control").hidden = !waveform;
     element("vinyl-condition-control").hidden = !waveform;
@@ -240,16 +303,18 @@ async function start() {
     input("tempo").disabled = waveform;
     if (trackKey !== nextTrackKey) {
       select.replaceChildren(
-        ...project.tracks.map((t) => {
-          const option = document.createElement("option");
-          option.value = t.id;
-          option.textContent = t.name;
-          return option;
-        }),
+        ...[{ id: ALL_TRACKS, name: "All tracks" }, ...project.tracks].map(
+          (t) => {
+            const option = document.createElement("option");
+            option.value = t.id;
+            option.textContent = t.name;
+            return option;
+          },
+        ),
       );
       trackKey = nextTrackKey;
     }
-    select.value = session.trackId;
+    select.value = session.allTracks ? ALL_TRACKS : session.trackId;
     input("tempo").value = String(
       Math.round(project.tempos[0].bpm * 100) / 100,
     );
@@ -322,23 +387,44 @@ async function start() {
     };
   };
   // Session requests must be made directly during the user's click, without awaiting file/audio loading.
-  button("enter-vr").disabled = false;
   let requestingXR = false;
-  button("enter-vr").onclick = () => {
+  let xrMode: "vr" | "ar" = "vr";
+  const enterXR = (mode: "vr" | "ar") => () => {
     if (world.session) world.exitXR();
     else {
       world.renderer.setSize(window.innerWidth, window.innerHeight);
       requestingXR = true;
+      xrMode = mode;
       navigation.setImmersive(true);
       void session.audio.unlock().catch(report);
-      world.launchXR();
+      world.launchXR({
+        sessionMode:
+          mode === "ar" ? SessionMode.ImmersiveAR : SessionMode.ImmersiveVR,
+      });
     }
   };
+  button("enter-vr").disabled = false;
+  button("enter-vr").onclick = enterXR("vr");
+  button("enter-ar").onclick = enterXR("ar");
+  // AR is offered only where the browser can show the real world behind the scene.
+  let arSupported = false;
+  void navigator.xr
+    ?.isSessionSupported("immersive-ar")
+    .then((supported) => {
+      if (destroyed) return;
+      arSupported = supported;
+      button("enter-ar").disabled = !supported;
+      button("enter-ar").hidden = !supported || !!world.session;
+    })
+    .catch(() => {});
   const visibilityCleanup = world.visibilityState.subscribe((value) => {
     const immersive = value !== VisibilityState.NonImmersive;
     navigation.setImmersive(immersive);
     root.classList.toggle("immersive", immersive);
     button("enter-vr").textContent = immersive ? "Exit VR" : "Enter VR";
+    button("enter-ar").textContent = immersive ? "Exit AR" : "Enter AR";
+    button("enter-vr").hidden = immersive && xrMode === "ar";
+    button("enter-ar").hidden = !arSupported || (immersive && xrMode === "vr");
     if (!immersive) {
       resizeViewport();
     }
@@ -370,6 +456,18 @@ async function start() {
       : "default";
   });
   handle("camera-reset", () => navigation.reset());
+  setCameraMode(
+    initialCamera && initialCamera in CAMERA_MODES
+      ? (initialCamera as CameraMode)
+      : "cabinet",
+  );
+  element<HTMLSelectElement>("camera-mode").onchange = (event) => {
+    const mode = (event.target as HTMLSelectElement).value as CameraMode;
+    setCameraMode(mode);
+    try {
+      localStorage.setItem("xr-daw.camera", mode);
+    } catch {}
+  };
   handle("camera-in", () => navigation.zoom(0.85));
   handle("camera-out", () => navigation.zoom(1 / 0.85));
   handle("lower", () => session.scrollPitch(-1));

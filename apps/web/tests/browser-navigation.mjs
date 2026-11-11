@@ -93,6 +93,9 @@ export default async function run({ frame, page }) {
     frame.evaluate(() =>
       window.FRAMEWORK_MCP_RUNTIME.world.camera.position.toArray(),
     );
+  // Orbit belongs to the 3D camera; parallel views are covered by browser-camera.mjs.
+  await frame.locator("#camera-mode").selectOption("perspective");
+  await frame.waitForTimeout(100);
   const home = await camera();
   const canvas = frame.locator("#scene-container canvas"),
     bounds = await canvas.boundingBox();

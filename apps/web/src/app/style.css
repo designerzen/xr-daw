@@ -100,7 +100,7 @@ nav {
   align-items: center;
   pointer-events: auto;
 }
-#enter-vr {
+.enter-xr {
   border: 1px solid #ffffff25;
   border-radius: 20px;
   padding: 9px 18px;
@@ -378,6 +378,18 @@ input[type="range"] {
 .scene-tools button {
   min-height: 34px;
 }
+#camera-mode {
+  width: 100%;
+  min-height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: #ffffff0d;
+  font-size: 11px;
+  text-align: center;
+}
+#camera-mode option {
+  background: #151c27;
+}
 .scene-tools [aria-pressed="true"],
 #follow[aria-pressed="true"] {
   background: #d8e8e2;
@@ -477,7 +489,7 @@ input[type="range"] {
   nav {
     gap: 4px;
   }
-  #enter-vr {
+  .enter-xr {
     padding: 8px 12px;
   }
   .transport {

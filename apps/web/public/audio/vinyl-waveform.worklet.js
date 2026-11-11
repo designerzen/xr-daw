@@ -1,6 +1,7 @@
 import { Engine } from "../vendor/vinyl/engine.js";
 import { W33 } from "../vendor/vinyl/geometry.js";
 import { engineTime, seekEngine, setCondition } from "./vinyl-controls.js";
+import { installGrooves } from "./vinyl-grooves.js";
 
 class WaveformVinyl extends AudioWorkletProcessor {
   constructor() {
@@ -10,12 +11,15 @@ class WaveformVinyl extends AudioWorkletProcessor {
     this.loop = false;
     this.scratching = false;
     this.count = 0;
+    this.revision = 0;
     this.port.onmessage = ({ data: message }) => {
       const engine = this.engine;
+      if (message.revision !== undefined) this.revision = message.revision;
       switch (message.type) {
         case "record":
           engine.setRecord(message.record);
           setCondition(engine, message.condition);
+          installGrooves(engine, message.record.grooves);
           this.duration = message.duration;
           this.playing = false;
           this.port.postMessage({ type: "record-ready", id: message.id });
@@ -72,7 +76,7 @@ class WaveformVinyl extends AudioWorkletProcessor {
         time = 0;
       } else {
         this.playing = false;
-        this.port.postMessage({ type: "ended" });
+        this.port.postMessage({ type: "ended", revision: this.revision });
       }
     }
     this.count += left.length;
@@ -80,6 +84,8 @@ class WaveformVinyl extends AudioWorkletProcessor {
       this.count = 0;
       this.port.postMessage({
         type: "position",
+        revision: this.revision,
+        contextTime: currentTime + left.length / sampleRate,
         time: Math.max(0, Math.min(this.duration, time)),
         rate: this.engine.wp / W33,
         peak: this.engine.tel.peak,

@@ -2,6 +2,9 @@ import { AudioEngine } from "./audio";
 import { ClipPlayer, type AudioClip } from "./clip-player";
 import { ProjectStore, projectEnd, snapTick, type Project } from "./project";
 
+export const ALL_TRACKS = "*";
+const MIN_PITCH_ROWS = 24;
+
 export class Session {
   readonly store: ProjectStore;
   readonly audio = new AudioEngine();
@@ -10,7 +13,10 @@ export class Session {
   followPlayback = true;
   viewSpan: 4 | 16 | "song" = 4;
   basePitch = 48;
+  pitchRows = 36;
+  /** The active track receives new notes and the track controls; others may still be shown. */
   trackId: string;
+  allTracks = true;
   view: "notes" | "velocity" | "waveform" = "notes";
   private listeners = new Set<() => void>();
   private revision = 0;
@@ -22,6 +28,10 @@ export class Session {
     this.trackId = project.tracks[0]?.id ?? "";
     this.fitPitch();
     this.unsubscribe = this.store.subscribe(() => {
+      // Selecting a note while every track is shown makes its track the active one.
+      const selected = this.store.selected;
+      if (selected && selected.trackId !== this.trackId)
+        this.trackId = selected.trackId;
       if (this.revision !== this.store.revision) {
         this.revision = this.store.revision;
         if (this.audio.playing)
@@ -76,31 +86,43 @@ export class Session {
   get track() {
     return this.store.project.tracks.find((t) => t.id === this.trackId);
   }
+  get trackIndex() {
+    return new Map(this.store.project.tracks.map((t, i) => [t.id, i]));
+  }
+  private get shownNotes() {
+    return this.allTracks
+      ? this.store.project.notes
+      : this.store.project.notes.filter((n) => n.trackId === this.trackId);
+  }
   get visibleNotes() {
-    return this.store.project.notes.filter(
+    return this.shownNotes.filter(
       (n) =>
-        n.trackId === this.trackId &&
         n.start < this.pageTick + this.pageSize &&
         n.start + n.duration > this.pageTick &&
         n.pitch >= this.basePitch &&
-        n.pitch <= this.basePitch + 35,
+        n.pitch < this.basePitch + this.pitchRows,
     );
   }
+  /** Size the pitch axis to every shown note in the song, so paging never hides a part. */
   fitPitch() {
-    const trackNotes = this.store.project.notes.filter(
-      (n) => n.trackId === this.trackId,
+    const pitches = this.shownNotes.map((n) => n.pitch);
+    if (!pitches.length) {
+      this.pitchRows = 36;
+      this.basePitch = 48;
+      return;
+    }
+    const low = Math.min(...pitches);
+    const high = Math.max(...pitches);
+    this.pitchRows = Math.min(
+      128,
+      Math.max(MIN_PITCH_ROWS, Math.ceil((high - low + 5) / 12) * 12),
     );
-    const pageNotes = trackNotes.filter(
-      (n) =>
-        n.start < this.pageTick + this.pageSize &&
-        n.start + n.duration > this.pageTick,
-    );
-    const pitches = (pageNotes.length ? pageNotes : trackNotes)
-      .map((n) => n.pitch)
-      .sort((a, b) => a - b);
     this.basePitch = Math.max(
       0,
-      Math.min(92, (pitches[Math.floor(pitches.length / 2)] ?? 60) - 18),
+      Math.min(
+        128 - this.pitchRows,
+        low - Math.floor((this.pitchRows - (high - low + 1)) / 2),
+      ),
     );
   }
   load(project: Project) {
@@ -110,12 +132,14 @@ export class Session {
     this.pageTick = 0;
     this.followPlayback = true;
     this.trackId = project.tracks[0]?.id ?? "";
+    this.allTracks = true;
     this.store.replace(project);
     this.fitPitch();
     this.emit();
   }
   selectTrack(id: string) {
-    this.trackId = id;
+    this.allTracks = id === ALL_TRACKS;
+    if (!this.allTracks) this.trackId = id;
     this.store.select(null);
     this.fitPitch();
     this.emit();
@@ -157,7 +181,10 @@ export class Session {
   }
   scrollPitch(direction: number) {
     if (this.view === "waveform") return;
-    this.basePitch = Math.max(0, Math.min(92, this.basePitch + direction * 12));
+    this.basePitch = Math.max(
+      0,
+      Math.min(128 - this.pitchRows, this.basePitch + direction * 12),
+    );
     this.emit();
   }
   async togglePlay() {

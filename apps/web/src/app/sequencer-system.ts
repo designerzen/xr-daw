@@ -24,14 +24,22 @@ import {
 } from "@iwsdk/core";
 import { NoteView } from "./components";
 import { projectEnd, snapTick, type Note } from "./project";
-import { Session } from "./session";
+import { ALL_TRACKS, Session } from "./session";
 import { MAX_NOTE_DEPTH, noteDepth } from "./note-depth";
 
 const LEFT = -1.6;
 const WIDTH = 3.2;
 const BOTTOM = 0.95;
-const ROW = 0.035;
+const HEIGHT = 1.26;
 const Z = -2.1;
+/** World-space placement of the note board, shared with the desktop camera fit. */
+export const BOARD = {
+  left: LEFT,
+  width: WIDTH,
+  bottom: BOTTOM,
+  height: HEIGHT,
+  z: Z,
+};
 const SELECTED = new Color(0x31405c);
 const glowGeometry = new BoxGeometry(1, 1, 1);
 
@@ -69,7 +77,7 @@ export function sequencerSystem(session: Session) {
     private contentEntity!: Entity;
     // A sheet through the whole velocity depth, so it reads from any camera angle.
     private playhead = new Mesh(
-      new PlaneGeometry(MAX_NOTE_DEPTH + 0.1, ROW * 36),
+      new PlaneGeometry(MAX_NOTE_DEPTH + 0.1, HEIGHT),
       new MeshBasicMaterial({
         color: 0x9fd0ff,
         transparent: true,
@@ -78,32 +86,38 @@ export function sequencerSystem(session: Session) {
         depthWrite: false,
       }),
     );
+    private floor = new GridHelper(20, 40, 0x27374f, 0x1b2638);
+    private backdrop = new Color("#10151f");
+    private passthrough = false;
     private playheadEdge = new Mesh(
-      new BoxGeometry(0.006, ROW * 36, 0.006),
+      new BoxGeometry(0.006, HEIGHT, 0.006),
       new MeshBasicMaterial({ color: 0xffffff }),
     );
 
     init() {
       // Rotate the data, never the headset. Local musical coordinates stay unchanged.
       this.viewPivot.name = "Sequencer view";
-      this.viewPivot.position.set(0, BOTTOM + ROW * 18, Z + MAX_NOTE_DEPTH / 2);
+      this.viewPivot.position.set(
+        0,
+        BOTTOM + HEIGHT / 2,
+        Z + MAX_NOTE_DEPTH / 2,
+      );
       this.content.position.copy(this.viewPivot.position).negate();
       const pivotEntity = this.world.createTransformEntity(this.viewPivot);
       this.contentEntity = this.world.createTransformEntity(
         this.content,
         pivotEntity,
       );
-      this.scene.background = new Color("#10151f");
+      this.scene.background = this.backdrop;
       const ambient = new AmbientLight(0xffffff, 0.9);
       const light = new DirectionalLight(0xffffff, 2.2);
       light.position.set(-3, 5, 2);
       this.scene.add(ambient, light);
-      const floor = new GridHelper(20, 40, 0x27374f, 0x1b2638);
-      floor.position.y = -0.02;
-      this.scene.add(floor);
+      this.floor.position.y = -0.02;
+      this.scene.add(this.floor);
       this.playhead.position.set(
         LEFT,
-        BOTTOM + ROW * 18,
+        BOTTOM + HEIGHT / 2,
         Z + (MAX_NOTE_DEPTH + 0.1) / 2,
       );
       this.playhead.rotation.y = Math.PI / 2;
@@ -193,14 +207,13 @@ export function sequencerSystem(session: Session) {
               .catch(session.onError);
         },
         track: () => {
-          const tracks = session.store.project.tracks;
-          if (tracks.length)
-            session.selectTrack(
-              tracks[
-                (tracks.findIndex((t) => t.id === session.trackId) + 1) %
-                  tracks.length
-              ].id,
-            );
+          // Cycle All tracks -> each track -> All tracks.
+          const ids = [
+            ALL_TRACKS,
+            ...session.store.project.tracks.map((t) => t.id),
+          ];
+          const current = session.allTracks ? ALL_TRACKS : session.trackId;
+          session.selectTrack(ids[(ids.indexOf(current) + 1) % ids.length]);
         },
       };
       for (const [id, action] of Object.entries(actions)) {
@@ -212,8 +225,9 @@ export function sequencerSystem(session: Session) {
       }
       this.cleanupFuncs.push(() => {
         this.scene.remove(ambient, light);
-        floor.geometry.dispose();
-        floor.material.dispose();
+        this.scene.remove(this.floor);
+        this.floor.geometry.dispose();
+        this.floor.material.dispose();
         this.playhead.geometry.dispose();
         this.playhead.material.dispose();
         this.playheadEdge.geometry.dispose();
@@ -229,10 +243,10 @@ export function sequencerSystem(session: Session) {
           this.world.createTransformEntity(object, this.contentEntity),
         );
       const board = new Mesh(
-        new BoxGeometry(WIDTH + 0.03, ROW * 36 + 0.03, 0.025),
+        new BoxGeometry(WIDTH + 0.03, HEIGHT + 0.03, 0.025),
         new MeshBasicMaterial({ color: 0x182232 }),
       );
-      board.position.set(0, BOTTOM + ROW * 18, Z - 0.035);
+      board.position.set(0, BOTTOM + HEIGHT / 2, Z - 0.035);
       add(board);
       const velocityAxis = new Mesh(
         new BoxGeometry(0.003, 0.003, MAX_NOTE_DEPTH),
@@ -264,14 +278,14 @@ export function sequencerSystem(session: Session) {
       const majorStep = Math.max(4, Math.ceil(bars / 4) * 4);
       for (let beat = 0; beat <= bars * 4; beat += minorStep) {
         const line = new Mesh(
-          new BoxGeometry(0.002, ROW * 36, 0.002),
+          new BoxGeometry(0.002, HEIGHT, 0.002),
           new MeshBasicMaterial({
             color: beat % majorStep ? 0x28364b : 0x546581,
           }),
         );
         line.position.set(
           LEFT + (beat * WIDTH) / (bars * 4),
-          BOTTOM + ROW * 18,
+          BOTTOM + HEIGHT / 2,
           Z - 0.015,
         );
         add(line);
@@ -284,28 +298,30 @@ export function sequencerSystem(session: Session) {
             ),
           );
       }
-      for (let pitch = 0; pitch <= 36; pitch++) {
+      const row = HEIGHT / session.pitchRows;
+      for (let pitch = 0; pitch <= session.pitchRows; pitch++) {
+        const octave = (session.basePitch + pitch) % 12 === 0;
+        // Dense keyboards keep only the octave lines so notes stay readable.
+        if (!octave && session.pitchRows > 60) continue;
         const line = new Mesh(
           new BoxGeometry(WIDTH, 0.001, 0.002),
-          new MeshBasicMaterial({
-            color: (session.basePitch + pitch) % 12 === 0 ? 0x546581 : 0x273449,
-          }),
+          new MeshBasicMaterial({ color: octave ? 0x546581 : 0x273449 }),
         );
-        line.position.set(0, BOTTOM + pitch * ROW, Z - 0.015);
+        line.position.set(0, BOTTOM + pitch * row, Z - 0.015);
         add(line);
-        if ((session.basePitch + pitch) % 12 === 0)
+        if (octave)
           add(
             label(
               `C${Math.floor((session.basePitch + pitch) / 12) - 1}`,
               LEFT - 0.12,
-              line.position.y + ROW / 2,
+              line.position.y + Math.max(row, 0.02) / 2,
               0.15,
             ),
           );
       }
       add(
         label(
-          `${session.track?.name ?? "No track"} · ${session.basePitch}–${session.basePitch + 35}`,
+          `${session.allTracks ? "All tracks" : (session.track?.name ?? "No track")} · ${session.basePitch}–${session.basePitch + session.pitchRows - 1}`,
           0,
           2.4,
           1.5,
@@ -317,7 +333,8 @@ export function sequencerSystem(session: Session) {
       this.noteEntities.forEach((entity) => entity.dispose());
       this.noteEntities = [];
       this.decorate();
-      const ppq = session.store.project.ppq;
+      const row = HEIGHT / session.pitchRows;
+      const tracks = session.trackIndex;
       for (const note of session.visibleNotes) {
         const start = Math.max(session.pageTick, note.start);
         const end = Math.min(
@@ -329,21 +346,28 @@ export function sequencerSystem(session: Session) {
           ((end - start) / session.pageSize) * WIDTH - 0.003,
         );
         const material = new MeshStandardMaterial({
-          color: new Color().setHSL((note.pitch / 24) % 1, 0.65, 0.58),
+          // One hue per part when every track is shown, otherwise one per pitch.
+          color: new Color().setHSL(
+            session.allTracks && tracks.size > 1
+              ? ((tracks.get(note.trackId) ?? 0) * 0.618 + 0.55) % 1
+              : (note.pitch / 24) % 1,
+            0.65,
+            0.58,
+          ),
           roughness: 0.65,
           emissive: 0x000000,
         });
         const depth = noteDepth(note.velocity);
         const centerZ = Z + depth / 2;
         const mesh = new Mesh(
-          new BoxGeometry(width, ROW * 0.85, depth),
+          new BoxGeometry(width, row * 0.85, depth),
           material,
         );
         mesh.position.set(
           LEFT +
             ((start - session.pageTick) / session.pageSize) * WIDTH +
             width / 2,
-          BOTTOM + (note.pitch - session.basePitch + 0.5) * ROW,
+          BOTTOM + (note.pitch - session.basePitch + 0.5) * row,
           centerZ,
         );
         mesh.name = `Note ${note.id} pitch ${note.pitch}`;
@@ -364,7 +388,7 @@ export function sequencerSystem(session: Session) {
             depthWrite: false,
           }),
         );
-        halo.scale.set(width + 0.02, ROW * 1.5, depth + 0.02);
+        halo.scale.set(width + 0.02, row * 1.5, depth + 0.02);
         halo.visible = false;
         halo.raycast = () => {};
         mesh.add(halo);
@@ -380,7 +404,7 @@ export function sequencerSystem(session: Session) {
             scale: false,
             movementMode: MovementMode.MoveFromTarget,
             translateMin: [LEFT, BOTTOM, centerZ],
-            translateMax: [LEFT + WIDTH, BOTTOM + ROW * 36, centerZ],
+            translateMax: [LEFT + WIDTH, BOTTOM + HEIGHT, centerZ],
           });
         const select = () => {
           session.store.select(note.id);
@@ -394,10 +418,24 @@ export function sequencerSystem(session: Session) {
         this.noteEntities.push(entity);
       }
       this.revision = session.store.revision;
-      this.viewKey = `${session.pageTick}:${session.basePitch}:${session.trackId}:${ppq}:${session.pageSize}`;
+      this.viewKey = this.layoutKey();
+    }
+
+    private layoutKey() {
+      return `${session.pageTick}:${session.basePitch}:${session.pitchRows}:${session.allTracks || session.trackId}:${session.store.project.ppq}:${session.pageSize}`;
     }
 
     update(delta: number) {
+      // In AR the real room replaces the studio backdrop and floor grid.
+      const blend = this.world.session?.environmentBlendMode;
+      const passthrough = !!blend && blend !== "opaque";
+      if (passthrough !== this.passthrough) {
+        this.passthrough = passthrough;
+        this.scene.background = passthrough ? null : this.backdrop;
+      }
+      // A floor only reads as depth in perspective; flat and oblique views would show stray diagonals.
+      this.floor.visible =
+        !passthrough && !this.world.camera.userData.parallelProjection;
       for (const entity of this.noteEntities) {
         const object = entity.object3D!;
         const previous = this.dragging.get(entity);
@@ -426,7 +464,10 @@ export function sequencerSystem(session: Session) {
               Math.min(
                 127,
                 previous.note.pitch +
-                  Math.round((object.position.y - previous.y) / ROW),
+                  Math.round(
+                    ((object.position.y - previous.y) * session.pitchRows) /
+                      HEIGHT,
+                  ),
               ),
             ),
           });
@@ -469,8 +510,10 @@ export function sequencerSystem(session: Session) {
           panel.requireElementById(`view-${view}`).setProperties({
             backgroundOpacity: session.view === view ? 0.25 : 0.04,
           });
-        const key = `${session.pageTick}:${session.basePitch}:${session.trackId}:${session.store.project.ppq}:${session.pageSize}`;
-        if (this.revision !== session.store.revision || key !== this.viewKey)
+        if (
+          this.revision !== session.store.revision ||
+          this.layoutKey() !== this.viewKey
+        )
           this.rebuild();
         this.dirty = false;
       }

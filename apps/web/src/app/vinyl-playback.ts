@@ -3,11 +3,13 @@ interface VinylMessage {
   type: string;
   id?: number;
   message?: string;
-  record?: { wallIn: Float32Array; wallOut: Float32Array };
+  record?: { grooves: { data: Float32Array } };
   left?: Float32Array;
   right?: Float32Array;
   time?: number;
   rate?: number;
+  contextTime?: number;
+  revision?: number;
 }
 
 /** Adapts the pinned rauchg/vinyl engine to a linear waveform transport. */
@@ -26,7 +28,26 @@ export class VinylPlayback {
       reject: (reason: Error) => void;
     }
   >();
-  position = 0;
+  private reportedPosition = 0;
+  private positionClock = 0;
+  private running = false;
+  private scratching = false;
+  private looping = false;
+  private duration = 0;
+  private revision = 0;
+  get position() {
+    const elapsed =
+      this.running && !this.scratching
+        ? Math.max(
+            0,
+            Math.min(0.05, this.context.currentTime - this.positionClock),
+          )
+        : 0;
+    const time = this.reportedPosition + elapsed * this.rate;
+    if (this.looping && this.duration > 0)
+      return ((time % this.duration) + this.duration) % this.duration;
+    return Math.max(0, Math.min(this.duration, time));
+  }
   rate = 1;
   onEnded: () => void = () => {};
   onError: (error: Error) => void = console.error;
@@ -47,9 +68,17 @@ export class VinylPlayback {
       }
     }
     if (message.type === "position") {
-      this.position = message.time!;
+      if (!this.running || message.revision !== this.revision) return;
+      if (!this.scratching) {
+        this.reportedPosition = message.time!;
+        this.positionClock = message.contextTime!;
+      }
       this.rate = message.rate!;
-    } else if (message.type === "ended") this.onEnded();
+    } else if (message.type === "ended" && message.revision === this.revision) {
+      this.reportedPosition = this.duration;
+      this.running = false;
+      this.onEnded();
+    }
   };
   private fail = (error: Error) => {
     for (const request of this.pending.values()) request.reject(error);
@@ -100,61 +129,73 @@ export class VinylPlayback {
   private async prepareNext(buffer: AudioBuffer, condition: VinylCondition) {
     await this.initialize();
     if (buffer === this.prepared && condition === this.condition) return;
-    let channels: { left: Float32Array; right: Float32Array } | undefined;
+    let channels: Float32Array[] | undefined;
     if (buffer !== this.prepared) {
-      // Fold multichannel input to the library's stereo groove without discarding channels.
-      const left = new Float32Array(buffer.length),
-        right = new Float32Array(buffer.length);
-      for (let c = 0; c < buffer.numberOfChannels; c++) {
-        const source = buffer.getChannelData(c);
-        const target = c % 2 ? right : left;
-        const divisor =
-          c % 2
-            ? Math.floor(buffer.numberOfChannels / 2)
-            : Math.ceil(buffer.numberOfChannels / 2);
-        for (let i = 0; i < source.length; i++)
-          target[i] += source[i] / divisor;
-      }
-      if (buffer.numberOfChannels === 1) right.set(left);
-      channels = { left, right };
+      // AudioBuffer storage cannot be transferred. Copy once, then mix in the worker.
+      channels = Array.from({ length: buffer.numberOfChannels }, (_, c) =>
+        buffer.getChannelData(c).slice(),
+      );
     }
     const result = await this.request(
       this.worker!,
       {
         type: "prepare",
-        ...channels,
+        channels,
         sampleRate: buffer.sampleRate,
         condition,
       },
-      channels ? [channels.left.buffer, channels.right.buffer] : [],
+      channels ? channels.map((channel) => channel.buffer) : [],
     );
     const record = result.record!;
     await this.request(
       this.node!.port,
       { type: "record", record, condition, duration: buffer.duration },
-      [record.wallIn.buffer, record.wallOut.buffer],
+      [record.grooves.data.buffer],
     );
     this.prepared = buffer;
     this.condition = condition;
+    this.duration = buffer.duration;
   }
   play(time: number, loop: boolean) {
-    this.position = time;
+    this.reportedPosition = time;
+    this.positionClock = this.context.currentTime;
+    this.running = true;
+    this.scratching = false;
+    this.looping = loop;
     this.rate = 1;
     this.node!.port.postMessage({ type: "loop", on: loop });
-    this.node!.port.postMessage({ type: "play", time });
+    this.node!.port.postMessage({
+      type: "play",
+      time,
+      revision: ++this.revision,
+    });
   }
   pause() {
-    this.node?.port.postMessage({ type: "pause" });
+    this.reportedPosition = this.position;
+    this.running = false;
+    this.scratching = false;
+    this.node?.port.postMessage({ type: "pause", revision: ++this.revision });
   }
   setLoop(on: boolean) {
+    this.looping = on;
     this.node?.port.postMessage({ type: "loop", on });
   }
   scratch(time: number, rate: number) {
-    this.position = time;
-    this.node?.port.postMessage({ type: "scratch", time, rate });
+    this.reportedPosition = time;
+    this.positionClock = this.context.currentTime;
+    this.scratching = true;
+    this.rate = rate;
+    this.node?.port.postMessage({
+      type: "scratch",
+      time,
+      rate,
+      revision: ++this.revision,
+    });
   }
   release() {
-    this.node?.port.postMessage({ type: "release" });
+    this.scratching = false;
+    this.positionClock = this.context.currentTime;
+    this.node?.port.postMessage({ type: "release", revision: ++this.revision });
   }
   async render(buffer: AudioBuffer, condition: VinylCondition, gain: number) {
     await this.prepare(buffer, condition);
@@ -170,8 +211,8 @@ export class VinylPlayback {
       buffer.length,
       buffer.sampleRate,
     );
-    output.copyToChannel(new Float32Array(result.left!), 0);
-    output.copyToChannel(new Float32Array(result.right!), 1);
+    output.copyToChannel(result.left! as Float32Array<ArrayBuffer>, 0);
+    output.copyToChannel(result.right! as Float32Array<ArrayBuffer>, 1);
     return output;
   }
   dispose() {

@@ -11,7 +11,7 @@ Winner of **Most Innovative App at MuseHub 2024**.
 Start with the included song or open a `.mid` or `.midi` file from your device. Notes encode musical data in three dimensions: horizontal position represents time, vertical position represents pitch, length represents duration, and depth represents velocity. Louder notes extend farther from a shared rear plane, so you can compare their dynamics spatially.
 
 - Drag notes with a mouse or point and grab with a VR controller or hand ray. Edits snap to sixteenth notes.
-- Use the transport to play, pause, and stop. Choose a track and adjust the tempo as you listen.
+- Use the transport to play, pause, and stop. Every track is shown at once, each in its own colour; choose a single track to focus on it, and adjust the tempo as you listen. Selecting a note makes its track the one that new notes and the track level and mute controls apply to.
 - Switch between **Notes** and **Velocity** to view the same 3D notes across pitch or depth. Switching views preserves your selection and playback position.
 - Select a note to change its length or velocity, audition it, or delete it. Add notes and undo or redo your edits from the editing menu.
 - Open the project menu to save a portable project or export a stereo WAV file.
@@ -40,11 +40,26 @@ Open the app in a browser with WebXR support and choose **Enter VR**. The timeli
 
 The transport menu provides track selection, note editing, and timeline navigation. Choose **Exit** to return to the desktop view.
 
+## Augmented reality
+
+On devices that support it, such as Meta Quest headsets and Android phones with Chrome, an **Enter AR** button appears beside **Enter VR**. It shows the same timeline and transport in your own room instead of the virtual studio. The button stays hidden where AR is unavailable.
+
 ## Mouse and touchscreen navigation
 
-Drag empty space to orbit the 3D scene. Right-drag or Shift-drag to pan, and scroll to zoom. On a touchscreen, drag empty space with one finger to orbit; use two fingers to pan and pinch to zoom. **Look** mode lets you rotate even when your gesture starts on a note or waveform. Turn it off to edit or scratch again. Use **Reset view** to return to the starting camera position.
+The music is scaled to fill the screen between the controls. The camera menu at the top of the side toolbar sets how it is drawn:
 
-The visible timeline strip offers **4 bars**, **16 bars**, or the entire **Song**. Use its arrows and slider to reach any section; the counter shows the current bars and total length. **Follow** advances the visible section during playback. Navigating manually turns Follow off; enable it again to return to the playhead. Each section fits its notes' pitch range, and the pitch arrows move it by an octave. These controls are also available in the VR transport.
+| Camera | View |
+| --- | --- |
+| **Oblique** (default) | Flat timeline with velocity depth drawn as a half-length diagonal. Every bar and pitch stays the same size. |
+| **Cavalier** | Like Oblique, with velocity depth at full length. |
+| **Flat** | Straight-on piano roll with no depth. |
+| **3D** | Perspective camera you can orbit. |
+
+Your choice is remembered on this device. Add `?camera=cabinet`, `cavalier`, `front`, or `perspective` to the address to choose one for a link.
+
+In the flat and oblique views, drag empty space to pan and scroll or pinch to zoom. In **3D**, drag empty space to orbit, right-drag or Shift-drag to pan, and scroll to zoom. On a touchscreen, drag with one finger to orbit in 3D or to pan in the other views; use two fingers to pan and pinch to zoom. **Look** mode (3D only) lets you rotate even when your gesture starts on a note or waveform. Turn it off to edit or scratch again. Use **Reset view** to fit the music to the screen again.
+
+The visible timeline strip offers **4 bars**, **16 bars**, or the entire **Song**. Use its arrows and slider to reach any section; the counter shows the current bars and total length. **Follow** advances the visible section during playback. Navigating manually turns Follow off; enable it again to return to the playhead. The pitch axis covers every shown note in the whole song, so parts never drop out of view as you page. The pitch arrows move it by an octave. These controls are also available in the VR transport.
 
 ## Keyboard controls
 

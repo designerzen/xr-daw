@@ -40,13 +40,11 @@ export default async function run({ frame, page }) {
       }
     };
   });
-  await frame
-    .locator("#open")
-    .setInputFiles({
-      name: "Vinyl test.wav",
-      mimeType: "audio/wav",
-      buffer: wavFile(),
-    });
+  await frame.locator("#open").setInputFiles({
+    name: "Vinyl test.wav",
+    mimeType: "audio/wav",
+    buffer: wavFile(),
+  });
   await frame.waitForFunction(
     () =>
       document

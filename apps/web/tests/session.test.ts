@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Session } from "../src/app/session";
+import { ALL_TRACKS, Session } from "../src/app/session";
 import { demoProject } from "../src/app/project";
 
 test("the full song is reachable and manual navigation suspends playback following", () => {
@@ -91,5 +91,46 @@ test("note creation, nudge, resize, and deletion use the same undoable model", (
   assert.equal(session.store.project.notes.length, 16);
   session.store.undo();
   assert.ok(session.store.project.notes.some((n) => n.id === id));
+  session.dispose();
+});
+
+test("every track is shown at once and the pitch axis covers the whole song", () => {
+  const project = demoProject();
+  project.tracks.push({ id: "bass", name: "Bass", gain: 0.7, muted: false });
+  project.notes.push(
+    {
+      id: "low",
+      trackId: "bass",
+      pitch: 28,
+      start: 480 * 40,
+      duration: 480,
+      velocity: 0.5,
+    },
+    {
+      id: "high",
+      trackId: "track-1",
+      pitch: 96,
+      start: 0,
+      duration: 480,
+      velocity: 0.5,
+    },
+  );
+  const session = new Session(project);
+  assert.equal(session.allTracks, true);
+  assert.ok(session.basePitch <= 28);
+  assert.ok(session.basePitch + session.pitchRows > 96);
+  assert.equal(session.pitchRows % 12, 0);
+  assert.ok(session.visibleNotes.some((n) => n.id === "high"));
+  session.goToPage(10);
+  assert.ok(session.visibleNotes.some((n) => n.id === "low"));
+  session.store.select("low");
+  assert.equal(session.trackId, "bass");
+  assert.equal(session.allTracks, true);
+  session.selectTrack("track-1");
+  assert.equal(session.allTracks, false);
+  assert.ok(session.visibleNotes.every((n) => n.trackId === "track-1"));
+  assert.ok(session.basePitch > 28);
+  session.selectTrack(ALL_TRACKS);
+  assert.equal(session.allTracks, true);
   session.dispose();
 });

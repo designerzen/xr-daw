@@ -2,16 +2,14 @@ import { cut } from "../vendor/vinyl/cut.js";
 import { press } from "../vendor/vinyl/press.js";
 import { Engine } from "../vendor/vinyl/engine.js";
 import { CONDITIONS, seekEngine, setCondition } from "./vinyl-controls.js";
+import { prepareGrooves, mixChannels } from "./vinyl-grooves.js";
 
 let master, record;
 self.onmessage = ({ data: message }) => {
   try {
     if (message.type === "prepare") {
-      if (message.left)
-        master = cut(
-          [{ L: message.left, R: message.right }],
-          message.sampleRate,
-        );
+      if (message.channels)
+        master = cut([mixChannels(message.channels)], message.sampleRate);
       if (!master) throw new Error("Load audio before preparing vinyl.");
       record = press(
         {
@@ -26,12 +24,13 @@ self.onmessage = ({ data: message }) => {
         throw new Error("This audio does not fit the simulated record.");
       const copy = {
         ...record,
-        wallIn: record.wallIn.slice(),
-        wallOut: record.wallOut.slice(),
+        // Playback reads prepared geometry; retain raw walls only here for export.
+        wallIn: undefined,
+        wallOut: undefined,
+        grooves: prepareGrooves(record, message.condition),
       };
       self.postMessage({ type: "record", id: message.id, record: copy }, [
-        copy.wallIn.buffer,
-        copy.wallOut.buffer,
+        copy.grooves.data.buffer,
       ]);
     } else if (message.type === "render") {
       if (!record) throw new Error("Prepare vinyl before rendering.");

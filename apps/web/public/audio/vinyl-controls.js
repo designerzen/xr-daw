@@ -27,14 +27,16 @@ export const CONDITIONS = {
     echo: 2,
   },
 };
+export function conditionStylus(condition) {
+  return condition === "clean"
+    ? "microline"
+    : condition === "damaged"
+      ? "conical"
+      : "elliptical";
+}
 export function setCondition(engine, condition) {
   engine.set({
-    stylus:
-      condition === "clean"
-        ? "microline"
-        : condition === "damaged"
-          ? "conical"
-          : "elliptical",
+    stylus: conditionStylus(condition),
     flutter: condition === "clean" ? 0 : 1,
     rumble: condition === "clean" ? 0 : 1,
     hum: 0,

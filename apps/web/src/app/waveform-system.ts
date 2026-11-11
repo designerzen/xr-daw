@@ -12,7 +12,7 @@ import {
   MeshBasicMaterial,
   Plane,
   Quaternion,
-  Ray,
+  Raycaster,
   RayInteractable,
   RingGeometry,
   Sprite,
@@ -183,11 +183,13 @@ export function waveformSystem(session: Session) {
         .addComponent(RayInteractable);
       const scrubPlane = new Plane(new Vector3(0, 0, 1), 2.1);
       let dragOffset = 0;
+      const screenRay = new Raycaster();
       const rayX = (event: SpatialPointerEvent) => {
+        // Rebuild screen rays from the camera: parallel views have no single eye point.
+        if (event.details.type === "screen-ray")
+          screenRay.setFromCamera(event.details.screenPoint, this.world.camera);
         const ray =
-          event.details.type === "screen-ray"
-            ? new Ray(event.pointerPosition, event.details.direction)
-            : event.ray;
+          event.details.type === "screen-ray" ? screenRay.ray : event.ray;
         return (
           ray.intersectPlane(scrubPlane, new Vector3())?.x ?? event.point.x
         );
