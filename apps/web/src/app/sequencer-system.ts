@@ -26,7 +26,7 @@ import {
 } from "@iwsdk/core";
 import { NoteView } from "./components";
 import { projectEnd, snapTick, type Note } from "./project";
-import { ALL_TRACKS, Session } from "./session";
+import { ALL_TRACKS, GRID_DIVISIONS, Session } from "./session";
 import { MAX_NOTE_DEPTH, noteDepth } from "./note-depth";
 
 const LEFT = -1.6;
@@ -44,6 +44,7 @@ export const BOARD = {
 };
 const SELECTED = new Color(0x31405c);
 const glowGeometry = new BoxGeometry(1, 1, 1);
+type Modifiers = { ctrlKey?: boolean; metaKey?: boolean; buttons?: number };
 
 function label(text: string, x: number, y: number, width = 0.4) {
   const canvas = document.createElement("canvas");
@@ -71,6 +72,18 @@ export function sequencerSystem(session: Session) {
     private noteEntities: Entity[] = [];
     private decorations: Entity[] = [];
     private dragging = new Map<Entity, { note: Note; x: number; y: number }>();
+    // The board under the notes takes Draw and Erase strokes.
+    private board?: Mesh;
+    private hover: { tick: number; pitch: number } | null = null;
+    private ghost = new Mesh(
+      new BoxGeometry(1, 1, 1),
+      new MeshBasicMaterial({
+        color: 0xd8e8e2,
+        transparent: true,
+        opacity: 0.35,
+        depthWrite: false,
+      }),
+    );
     private dirty = true;
     private revision = -1;
     private viewKey = "";
@@ -149,6 +162,10 @@ export function sequencerSystem(session: Session) {
       this.playheadEdge.position.x = -(MAX_NOTE_DEPTH + 0.1) / 2;
       this.playhead.add(this.playheadEdge);
       this.content.add(this.playhead);
+      this.ghost.name = "Draw preview";
+      this.ghost.visible = false;
+      this.ghost.raycast = () => {};
+      this.content.add(this.ghost);
       this.cleanupFuncs.push(
         session.subscribe(() => {
           this.dirty = true;
@@ -226,6 +243,19 @@ export function sequencerSystem(session: Session) {
         higher: () => session.scrollPitch(1),
         add: () => session.addNote(),
         delete: () => session.deleteNote(),
+        tool: () => {
+          const tools = ["select", "draw", "erase"] as const;
+          session.setTool(tools[(tools.indexOf(session.tool) + 1) % 3]);
+        },
+        grid: () => {
+          const index = GRID_DIVISIONS.indexOf(session.grid);
+          session.setGrid(GRID_DIVISIONS[(index + 1) % GRID_DIVISIONS.length]);
+        },
+        copy: () => session.copy(),
+        paste: () => session.paste(),
+        duplicate: () => session.duplicate(),
+        quantize: () => session.quantize(),
+        "select-all": () => session.selectAll(),
         seek: () => {
           void session.playFromView().catch(session.onError);
         },
@@ -255,20 +285,41 @@ export function sequencerSystem(session: Session) {
         this.playhead.material.dispose();
         this.playheadEdge.geometry.dispose();
         this.playheadEdge.material.dispose();
+        this.ghost.geometry.dispose();
+        this.ghost.material.dispose();
       });
     }
 
     private decorate() {
       this.decorations.forEach((entity) => entity.dispose());
       this.decorations = [];
-      const add = (object: Mesh | Sprite, parent = this.contentEntity) =>
-        this.decorations.push(this.world.createTransformEntity(object, parent));
+      const add = (object: Mesh | Sprite, parent = this.contentEntity) => {
+        const entity = this.world.createTransformEntity(object, parent);
+        this.decorations.push(entity);
+        return entity;
+      };
       const board = new Mesh(
         new BoxGeometry(WIDTH + 0.03, HEIGHT + 0.03, 0.025),
         new MeshBasicMaterial({ color: 0x182232 }),
       );
+      board.name = "Note board";
       board.position.set(0, BOTTOM + HEIGHT / 2, Z - 0.035);
-      add(board);
+      add(board).addComponent(RayInteractable);
+      this.board = board;
+      board.addEventListener("pointerdown", (event) => {
+        if (session.view !== "notes" || session.tool !== "draw") return;
+        const cell = this.cellAt(event.point);
+        if (!cell) return;
+        event.stopPropagation();
+        session.drawNote(cell.tick, cell.pitch);
+        this.audition();
+      });
+      board.addEventListener("pointermove", (event) => {
+        this.hover = this.cellAt(event.point);
+      });
+      board.addEventListener("pointerleave", () => {
+        this.hover = null;
+      });
       const velocityAxis = new Mesh(
         new BoxGeometry(0.003, 0.003, MAX_NOTE_DEPTH),
         new MeshBasicMaterial({ color: 0x546581 }),
@@ -355,6 +406,34 @@ export function sequencerSystem(session: Session) {
           1.5,
         ),
       );
+    }
+
+    /** The time and pitch on screen at a world point, or null outside the keyboard. */
+    private cellAt(point: Vector3) {
+      const local = this.content.worldToLocal(point.clone());
+      const pitch =
+        session.basePitch +
+        Math.floor(((local.y - BOTTOM) / HEIGHT) * session.pitchRows);
+      if (
+        pitch < session.basePitch ||
+        pitch >= session.basePitch + session.pitchRows
+      )
+        return null;
+      const tick =
+        session.viewStart + ((local.x - LEFT) / WIDTH) * session.pageSize;
+      return { tick: Math.max(0, tick), pitch };
+    }
+
+    private audition() {
+      const note = session.store.selected;
+      if (note)
+        void session.audio
+          .audition(
+            note,
+            session.store.project.tracks.find((t) => t.id === note.trackId)
+              ?.gain,
+          )
+          .catch(session.onError);
     }
 
     /** Strip-local x of a tick; the strip itself is offset by the view position. */
@@ -446,25 +525,34 @@ export function sequencerSystem(session: Session) {
         halo.raycast = () => {};
         mesh.add(halo);
         const entity = this.world.createTransformEntity(mesh, this.stripEntity);
-        entity
-          .addComponent(NoteView)
-          .addComponent(RayInteractable)
-          .addComponent(DistanceGrabbable, {
+        entity.addComponent(NoteView).addComponent(RayInteractable);
+        // Erasing never grabs, so a note can be removed without starting a drag.
+        if (session.tool !== "erase")
+          entity.addComponent(DistanceGrabbable, {
             rotate: false,
             scale: false,
             movementMode: MovementMode.MoveFromTarget,
             translateMin: [LEFT, BOTTOM, centerZ],
             translateMax: [this.stripX(stripEnd), BOTTOM + HEIGHT, centerZ],
           });
-        const select = () => {
-          session.store.select(note.id);
-          const current = session.store.selected;
-          if (current)
-            void session.audio
-              .audition(current, session.track?.gain)
-              .catch(session.onError);
+        const select = (event: Modifiers) => {
+          if (session.tool === "erase") {
+            // Defer, so the entity is not rebuilt away while its event is still dispatching.
+            queueMicrotask(() => session.erase(note.id));
+            return;
+          }
+          session.pick(note.id, !!(event.ctrlKey || event.metaKey));
+          if (session.store.isSelected(note.id)) this.audition();
         };
         entity.object3D!.addEventListener("pointerdown", select);
+        // Erase strokes: dragging across notes with the button held removes each one.
+        entity.object3D!.addEventListener(
+          "pointerenter",
+          (event: Modifiers) => {
+            if (session.tool === "erase" && (event.buttons ?? 0) & 1)
+              queueMicrotask(() => session.erase(note.id));
+          },
+        );
         this.noteEntities.push(entity);
       }
       this.revision = session.store.revision;
@@ -473,7 +561,7 @@ export function sequencerSystem(session: Session) {
 
     private layoutKey() {
       const range = this.stripRange();
-      return `${range.start}:${range.length}:${session.basePitch}:${session.pitchRows}:${session.allTracks || session.trackId}:${session.store.project.ppq}:${session.pageSize}`;
+      return `${range.start}:${range.length}:${session.basePitch}:${session.pitchRows}:${session.allTracks || session.trackId}:${session.store.project.ppq}:${session.pageSize}:${session.tool === "erase"}`;
     }
 
     private updateTimelineLabel(viewStart: number, viewEnd: number) {
@@ -519,28 +607,65 @@ export function sequencerSystem(session: Session) {
           }
         } else if (previous) {
           this.dragging.delete(entity);
-          session.store.updateNote(previous.note.id, {
-            start: snapTick(
-              previous.note.start +
-                ((object.position.x - previous.x) / WIDTH) * session.pageSize,
-              session.store.project.ppq,
-            ),
-            pitch: Math.max(
-              0,
-              Math.min(
-                127,
-                previous.note.pitch +
-                  Math.round(
-                    ((object.position.y - previous.y) * session.pitchRows) /
-                      HEIGHT,
-                  ),
-              ),
-            ),
-          });
+          const start = snapTick(
+            previous.note.start +
+              ((object.position.x - previous.x) / WIDTH) * session.pageSize,
+            session.store.project.ppq,
+            session.grid,
+          );
+          const pitch = Math.round(
+            ((object.position.y - previous.y) * session.pitchRows) / HEIGHT,
+          );
+          if (session.store.isSelected(previous.note.id))
+            session.move(start - previous.note.start, pitch);
+          else
+            session.store.updateNote(previous.note.id, {
+              start,
+              pitch: Math.max(0, Math.min(127, previous.note.pitch + pitch)),
+            });
           // Always restore the exact snapped transform, even when no history entry was needed.
           this.revision = -1;
           this.dirty = true;
         }
+      }
+      const selected = new Set(session.store.selectedIds);
+      const [leader] = this.dragging.keys();
+      if (leader && selected.has(leader.object3D!.userData.noteId)) {
+        const moved = leader.object3D!;
+        const dx = moved.position.x - moved.userData.anchorX;
+        const dy = moved.position.y - moved.userData.anchorY;
+        for (const entity of this.noteEntities) {
+          const object = entity.object3D!;
+          if (entity !== leader && selected.has(object.userData.noteId))
+            object.position.set(
+              object.userData.anchorX + dx,
+              object.userData.anchorY + dy,
+              object.position.z,
+            );
+        }
+      }
+      const editing = session.view === "notes" && session.tool !== "select";
+      if (this.board) this.board.userData.editSurface = editing;
+      this.ghost.visible =
+        session.view === "notes" && session.tool === "draw" && !!this.hover;
+      if (this.ghost.visible && this.hover) {
+        const ppq = session.store.project.ppq;
+        const step = session.grid > 0 ? ppq / session.grid : 1;
+        const start = Math.floor(this.hover.tick / step) * step;
+        const row = HEIGHT / session.pitchRows;
+        const width = (session.drawLength / session.pageSize) * WIDTH;
+        this.ghost.scale.set(
+          width,
+          row * 0.85,
+          noteDepth(session.drawVelocity),
+        );
+        this.ghost.position.set(
+          LEFT +
+            ((start - session.viewStart) / session.pageSize) * WIDTH +
+            width / 2,
+          BOTTOM + (this.hover.pitch - session.basePitch + 0.5) * row,
+          Z + noteDepth(session.drawVelocity) / 2,
+        );
       }
       if (this.dirty && this.dragging.size === 0) {
         this.viewPivot.visible = session.view !== "waveform";
@@ -554,6 +679,14 @@ export function sequencerSystem(session: Session) {
         });
         panel.requireElementById("scroll").setProperties({
           backgroundOpacity: scrolling ? 0.25 : 0.04,
+        });
+        panel.requireElementById("tool-label").setProperties({
+          text: { select: "Select", draw: "Draw", erase: "Erase" }[
+            session.tool
+          ],
+        });
+        panel.requireElementById("grid-label").setProperties({
+          text: session.grid ? `Grid 1/${session.grid * 4}` : "Grid off",
         });
         panel.requireElementById("span-label").setProperties({
           text:
@@ -619,8 +752,7 @@ export function sequencerSystem(session: Session) {
         data.flash *= Math.exp(-delta * 7);
         const level = data.glow * 0.6 + data.flash * 0.8;
         mesh.material.emissive.copy(mesh.material.color).multiplyScalar(level);
-        if (data.noteId === session.store.selectedId)
-          mesh.material.emissive.add(SELECTED);
+        if (selected.has(data.noteId)) mesh.material.emissive.add(SELECTED);
         const halo = mesh.children[0] as Mesh<BoxGeometry, MeshBasicMaterial>;
         halo.visible = level > 0.01;
         halo.material.opacity = data.glow * 0.2 + data.flash * 0.5;

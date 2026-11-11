@@ -161,3 +161,101 @@ test("scroll mode centres the playhead once it reaches the middle of the view", 
   assert.equal(session.pageTick, 480 * 4 * 8);
   session.dispose();
 });
+
+test("drawing places a note in the grid cell and reuses the last note's shape", () => {
+  const session = new Session(demoProject());
+  session.pick("note-3");
+  session.resize(1);
+  const id = session.drawNote(480 * 2 + 200, 70)!;
+  const drawn = session.store.project.notes.find((n) => n.id === id)!;
+  assert.equal(drawn.start, 480 * 2 + 120, "floored to the sixteenth");
+  assert.equal(drawn.pitch, 70);
+  assert.equal(drawn.duration, 360, "resizing snaps the length to the grid");
+  assert.equal(drawn.trackId, "track-1");
+  assert.deepEqual(session.store.selectedIds, [id]);
+  session.setGrid(1);
+  session.drawNote(700, 60);
+  assert.equal(session.store.selected?.start, 480, "floored to the beat");
+  session.erase(id);
+  assert.ok(!session.store.project.notes.some((n) => n.id === id));
+  session.dispose();
+});
+
+test("a multi-note selection moves, resizes, recolours and deletes as one undo step", () => {
+  const session = new Session(demoProject());
+  session.pick("note-0");
+  session.pick("note-1", true);
+  session.pick("note-2", true);
+  session.pick("note-1", true);
+  assert.deepEqual(session.store.selectedIds, ["note-0", "note-2"]);
+  // Picking a note that is already selected keeps the group, so it can be dragged together.
+  session.pick("note-0");
+  assert.deepEqual(session.store.selectedIds, ["note-2", "note-0"]);
+  session.nudge(-1, 0);
+  assert.equal(
+    session.store.project.notes[0].start,
+    0,
+    "the group stops at the song start",
+  );
+  session.move(480, 128);
+  const [first, , third] = session.store.project.notes;
+  assert.equal(first.start, 480);
+  assert.equal(third.start, 480 + 480);
+  assert.equal(
+    third.pitch,
+    127,
+    "the highest note stops at the top of the MIDI range",
+  );
+  assert.equal(first.pitch, 60 + 127 - 67);
+  session.setVelocity(0.2);
+  assert.ok(session.store.selectedNotes.every((n) => n.velocity === 0.2));
+  session.store.undo();
+  session.store.undo();
+  assert.equal(session.store.project.notes[0].start, 0);
+  assert.equal(session.store.project.notes[2].pitch, 67);
+  session.deleteNote();
+  assert.equal(session.store.project.notes.length, 14);
+  session.store.undo();
+  assert.equal(session.store.project.notes.length, 16);
+  session.selectAll();
+  assert.equal(session.store.selectedNotes.length, 16);
+  session.dispose();
+});
+
+test("copy, paste, duplicate and quantize", () => {
+  const project = demoProject();
+  project.notes[1].start = 250;
+  project.notes[1].duration = 200;
+  const session = new Session(project);
+  session.pick("note-0");
+  session.pick("note-1", true);
+  session.copy();
+  let position = 480 * 3 + 50;
+  Object.defineProperty(session.audio, "positionTick", { get: () => position });
+  session.paste();
+  const pasted = session.store.selectedNotes;
+  assert.equal(pasted.length, 2);
+  assert.deepEqual(
+    pasted.map((n) => n.start),
+    [480 * 3, 480 * 3 + 250],
+  );
+  assert.equal(session.store.project.notes.length, 18);
+  // Out of view, pasting goes to the start of the page instead.
+  position = 480 * 40;
+  session.paste();
+  assert.equal(session.store.selectedNotes[0].start, 0);
+  session.duplicate();
+  assert.deepEqual(
+    session.store.selectedNotes.map((n) => n.start),
+    [480, 480 + 250],
+  );
+  session.quantize();
+  const [a, b] = session.store.selectedNotes;
+  assert.equal(a.start, 480);
+  assert.equal(b.start, 480 + 240);
+  assert.equal(b.duration, 240);
+  session.cut();
+  assert.equal(session.store.selectedNotes.length, 0);
+  assert.equal(session.clipboard.length, 2);
+  session.dispose();
+});

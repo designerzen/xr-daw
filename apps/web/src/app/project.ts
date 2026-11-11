@@ -80,8 +80,9 @@ export function secondsToTick(project: Project, seconds: number): number {
   return 0;
 }
 
-export function snapTick(tick: number, ppq: number): number {
-  const step = ppq / 4;
+/** Round to the grid. The default grid is a sixteenth note: four steps per beat. */
+export function snapTick(tick: number, ppq: number, division = 4): number {
+  const step = division > 0 ? ppq / division : 1;
   return Math.max(0, Math.round(tick / step) * step);
 }
 
@@ -160,7 +161,8 @@ export function validateProject(value: unknown): Project {
 
 export class ProjectStore {
   project: Project;
-  selectedId: string | null = null;
+  /** Selected note ids; the last one is the primary note the inspector shows. */
+  selectedIds: string[] = [];
   revision = 0;
   private past: Project[] = [];
   private future: Project[] = [];
@@ -176,12 +178,34 @@ export class ProjectStore {
   private emit() {
     this.listeners.forEach((fn) => fn());
   }
+  get selectedId() {
+    return this.selectedIds.at(-1) ?? null;
+  }
   select(id: string | null) {
-    this.selectedId = id;
+    this.selectedIds = id ? [id] : [];
     this.emit();
+  }
+  selectMany(ids: string[]) {
+    this.selectedIds = [...new Set(ids)];
+    this.emit();
+  }
+  /** Add a note to the selection, or take it out if it is already there. */
+  toggleSelected(id: string) {
+    this.selectedIds = this.selectedIds.includes(id)
+      ? this.selectedIds.filter((other) => other !== id)
+      : [...this.selectedIds, id];
+    this.emit();
+  }
+  isSelected(id: string) {
+    return this.selectedIds.includes(id);
   }
   get selected() {
     return this.project.notes.find((n) => n.id === this.selectedId);
+  }
+  /** Selected notes that still exist; undo can remove notes out from under the selection. */
+  get selectedNotes() {
+    const ids = new Set(this.selectedIds);
+    return this.project.notes.filter((n) => ids.has(n.id));
   }
   get canUndo() {
     return this.past.length > 0;
@@ -193,7 +217,7 @@ export class ProjectStore {
     this.project = validateProject(project);
     this.past = [];
     this.future = [];
-    this.selectedId = null;
+    this.selectedIds = [];
     this.revision++;
     this.emit();
   }
@@ -217,6 +241,11 @@ export class ProjectStore {
       const note = p.notes.find((n) => n.id === id);
       if (note) Object.assign(note, change);
     });
+  }
+  /** Change several notes as one undoable step. */
+  updateNotes(ids: string[], change: (note: Note) => void) {
+    const selected = new Set(ids);
+    this.edit((p) => p.notes.filter((n) => selected.has(n.id)).forEach(change));
   }
   undo() {
     const previous = this.past.pop();

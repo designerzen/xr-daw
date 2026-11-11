@@ -10,10 +10,14 @@ Winner of **Most Innovative App at MuseHub 2024**.
 
 Start with the included song or open a `.mid` or `.midi` file from your device. Notes encode musical data in three dimensions: horizontal position represents time, vertical position represents pitch, length represents duration, and depth represents velocity. Louder notes extend farther from a shared rear plane, so you can compare their dynamics spatially.
 
-- Drag notes with a mouse or point and grab with a VR controller or hand ray. Edits snap to sixteenth notes.
+- Drag notes with a mouse or point and grab with a VR controller or hand ray. Edits snap to the grid, a sixteenth note unless you choose another size (or Off) in the tool palette.
 - Use the transport to play, pause, and stop. Every track is shown at once, each in its own colour; choose a single track to focus on it, and adjust the tempo as you listen. Selecting a note makes its track the one that new notes and the track level and mute controls apply to.
 - Switch between **Notes** and **Velocity** to view the same 3D notes across pitch or depth. Switching views preserves your selection and playback position.
-- Select a note to change its length or velocity, audition it, or delete it. Add notes and undo or redo your edits from the editing menu.
+- Select a note to change its length or velocity, audition it, repeat it, or delete it. Add notes and undo or redo your edits from the editing menu.
+- The tool palette on the left switches between **Select**, **Draw** and **Erase**. Draw adds a note in the grid cell you click, previewing it as you hover; new notes take the length and velocity of the last note you drew, resized or selected. Erase removes notes you click, or drag across with the button held.
+- Ctrl/Cmd-click notes to build a selection, or select them all. A selection moves, resizes, transposes, changes velocity and deletes together, and dragging any note in it drags the group. Tap empty space to clear it.
+- Cut, copy and paste from the editing menu: notes are pasted at the playhead when it is in view, otherwise at the start of the view. **Repeat** places a copy of the selection straight after itself, and **Quantize** snaps the selection's starts and ends to the grid.
+- In VR, the menu's **Select**/**Draw**/**Erase** button cycles the tool and the **Grid** button cycles the snap size, next to All, Copy, Paste, Repeat and Quantize.
 - Open the project menu to save a portable project or export a stereo WAV file.
 
 Projects autosave in your browser on your device. Download a project file to keep a copy or move it to another computer. Reopening that file restores its notes, tracks, levels, and tempo map.
@@ -68,11 +72,18 @@ Choose **Scroll** in the timeline strip for a continuous view instead of pages. 
 | Key | Action |
 | --- | --- |
 | Space | Play or pause |
-| Left / right | Move the selected note in time |
-| Up / down | Change the selected note's pitch |
+| Left / right | Move the selected notes one grid step |
+| Up / down | Change the selected notes' pitch |
 | Shift + left / right | Change note duration |
 | Shift + up / down | Transpose by an octave |
-| Delete / Backspace | Delete the selected note |
+| Delete / Backspace | Delete the selected notes |
+| V / B / E | Select, Draw or Erase tool |
+| Ctrl/Cmd + click | Add a note to the selection, or take it out |
+| Ctrl/Cmd + A | Select every shown note |
+| Ctrl/Cmd + X / C / V | Cut, copy or paste |
+| Ctrl/Cmd + D | Repeat the selection after itself |
+| Q | Quantize the selection |
+| Escape | Clear the selection |
 | Ctrl/Cmd + Z | Undo |
 | Ctrl/Cmd + Shift + Z | Redo |
 

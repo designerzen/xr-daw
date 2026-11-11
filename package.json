@@ -22,6 +22,7 @@
     "test:navigation": "npm run test:navigation --workspace @xr-daw/web",
     "test:camera": "npm run test:camera --workspace @xr-daw/web",
     "test:scroll": "npm run test:scroll --workspace @xr-daw/web",
+    "test:editing": "npm run test:editing --workspace @xr-daw/web",
     "test:media": "npm run test:media --workspace @xr-daw/web",
     "test:vinyl": "npm run test:vinyl --workspace @xr-daw/web",
     "test:xr": "npm run test:xr --workspace @xr-daw/web",

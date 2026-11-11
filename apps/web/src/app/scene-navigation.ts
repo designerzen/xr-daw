@@ -71,6 +71,9 @@ export class SceneNavigation {
   private shear = new Matrix4();
   mode: CameraMode = "cabinet";
   look = false;
+  /** A press and release on the background without dragging, such as to clear a selection. */
+  onTap?: () => void;
+  private tap: Vector2 | null = null;
 
   constructor(
     private camera: PerspectiveCamera,
@@ -273,6 +276,7 @@ export class SceneNavigation {
     this.scene.traverseVisible((object) => {
       if (
         object.userData.noteId ||
+        object.userData.editSurface ||
         object.name === "Waveform seek surface" ||
         object.name.startsWith("Waveform circles channel")
       )
@@ -325,6 +329,10 @@ export class SceneNavigation {
       event.button === 2 ||
       event.shiftKey;
     this.baseline();
+    this.tap =
+      this.gesture && this.points.size === 1 && !this.look
+        ? new Vector2(event.clientX, event.clientY)
+        : null;
     if (!this.gesture) return;
     this.stop(event);
     for (const id of this.points.keys()) this.canvas.setPointerCapture(id);
@@ -336,6 +344,12 @@ export class SceneNavigation {
       previousDistance = this.distance;
     this.points.set(event.pointerId, { x: event.clientX, y: event.clientY });
     this.baseline();
+    if (
+      this.tap &&
+      (this.points.size > 1 ||
+        this.tap.distanceTo(new Vector2(event.clientX, event.clientY)) > 5)
+    )
+      this.tap = null;
     if (!this.gesture) return;
     this.stop(event);
     const dx = this.center.x - previous.x,
@@ -354,8 +368,12 @@ export class SceneNavigation {
       if (this.canvas.hasPointerCapture(event.pointerId))
         this.canvas.releasePointerCapture(event.pointerId);
     }
-    if (!this.points.size) this.gesture = false;
-    else this.baseline();
+    if (!this.points.size) {
+      if (this.gesture && this.tap && event.type === "pointerup")
+        this.onTap?.();
+      this.tap = null;
+      this.gesture = false;
+    } else this.baseline();
   };
   private wheel = (event: WheelEvent) => {
     if (this.immersive) return;

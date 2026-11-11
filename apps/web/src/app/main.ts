@@ -4,7 +4,14 @@ import { encodeWav, exportWav } from "./audio";
 import { importMidi } from "./midi";
 import { restoreProject, saveProject } from "./persistence";
 import { demoProject, projectEnd, validateProject } from "./project";
-import { ALL_TRACKS, Session, type TimelineMode } from "./session";
+import {
+  ALL_TRACKS,
+  GRID_DIVISIONS,
+  Session,
+  type EditTool,
+  type GridDivision,
+  type TimelineMode,
+} from "./session";
 import { BOARD, sequencerSystem } from "./sequencer-system";
 import { waveformSystem } from "./waveform-system";
 import type { VinylCondition } from "./vinyl-playback";
@@ -38,6 +45,15 @@ const icons: Record<string, string> = {
   previous: "M15 5l-7 7 7 7",
   next: "M9 5l7 7-7 7",
   reset: "M4 11a8 8 0 1 1 2 7M4 4v7h7",
+  select: "M6 3l12 9-5.5 1 3 6-2 1-3-6L6 18z",
+  draw: "M4 20l1-4L16 5l3 3L8 19zM14 7l3 3",
+  erase: "M9 20h11M4 15l9-9 6 6-8 8H8z",
+  duplicate: "M8 8h11v11H8zM5 16V5h11",
+};
+const TOOLS: Record<EditTool, string> = {
+  select: "Select and move notes (V)",
+  draw: "Draw notes (B)",
+  erase: "Erase notes (E)",
 };
 const icon = (name: string) =>
   `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${icons[name]}"/></svg>`;
@@ -76,6 +92,18 @@ root.innerHTML = `
     <span class="pitch-tools">${iconButton("higher", "Higher pitches", "next")}${iconButton("lower", "Lower pitches", "previous")}</span>
     <details class="menu navigation-help"><summary aria-label="Navigation help">?</summary><div class="menu-panel">Drag background to orbit.<br />Right-drag or Shift-drag to pan.<br />Scroll to zoom.<br />Touch: two fingers to pan and pinch.<br />Look mode lets you rotate over notes.</div></details>
   </nav>
+  <nav id="edit-tools" class="edit-tools" aria-label="Editing tools">
+    ${Object.entries(TOOLS)
+      .map(
+        ([tool, label]) =>
+          `<button type="button" id="tool-${tool}" class="icon-button" aria-pressed="${tool === "select"}" aria-label="${label}" title="${label}">${icon(tool)}</button>`,
+      )
+      .join("")}
+    <select id="grid" aria-label="Snap grid" title="Snap grid">${GRID_DIVISIONS.map(
+      (division) =>
+        `<option value="${division}">${division ? `1/${division * 4}` : "Off"}</option>`,
+    ).join("")}</select>
+  </nav>
   <nav id="timeline-navigation" class="timeline-navigation" aria-label="Timeline">
     <select id="timeline-span" aria-label="Visible timeline" title="Visible timeline"><option value="4">4 bars</option><option value="16">16 bars</option><option value="song">Song</option></select>
     ${iconButton("previous", "Previous four bars", "previous")}
@@ -100,7 +128,9 @@ root.innerHTML = `
         <button id="seek">Play from this page</button><hr />
         <div class="menu-row"><button id="undo">Undo</button><button id="redo">Redo</button></div>
         <button id="add">Add note</button>
-        <p class="shortcut-hint">Space to play · Arrows to edit<br />Shift + arrows to resize or transpose<br />Ctrl / Cmd + Z to undo</p>
+        <div class="menu-row"><button id="select-all">Select all</button><button id="quantize">Quantize</button></div>
+        <div class="menu-row"><button id="cut">Cut</button><button id="copy">Copy</button><button id="paste">Paste</button></div>
+        <p class="shortcut-hint">Space to play · Arrows to edit<br />Shift + arrows to resize or transpose<br />Ctrl / Cmd + click to add to the selection<br />Ctrl / Cmd + A, X, C, V, D · Q to quantize<br />V select · B draw · E erase<br />Ctrl / Cmd + Z to undo</p>
       </div>
     </details>
   </section>
@@ -108,7 +138,7 @@ root.innerHTML = `
     <span id="note-label"></span>
     ${iconButton("shorter", "Shorter note", "shorter")}${iconButton("longer", "Longer note", "longer")}
     <input id="velocity" type="range" min="0.01" max="1" step="0.01" aria-label="Velocity" title="Velocity" disabled />
-    ${iconButton("audition", "Audition note", "audition")}${iconButton("delete", "Delete note", "delete")}
+    ${iconButton("duplicate", "Repeat after itself (Ctrl+D)", "duplicate")}${iconButton("audition", "Audition note", "audition")}${iconButton("delete", "Delete note", "delete")}
   </section>
   <span id="status" class="status" role="status" aria-live="polite">Starting studio…</span>
   <div id="drop-target" aria-hidden="true">Drop MIDI or audio</div>
@@ -180,6 +210,7 @@ async function start() {
         : null;
     };
     const tools = visible(".scene-tools");
+    const editing = visible(".edit-tools");
     return {
       top:
         Math.max(
@@ -198,7 +229,7 @@ async function start() {
         ) +
         8,
       right: tools ? bounds.right - tools.left + 8 : 16,
-      left: 16,
+      left: editing ? editing.right - bounds.left + 8 : 16,
     };
   };
   const navigation = new SceneNavigation(
@@ -317,9 +348,25 @@ async function start() {
     input("mute").checked = waveform
       ? session.clipPlayer.muted
       : (session.track?.muted ?? false);
+    for (const tool of Object.keys(TOOLS) as EditTool[])
+      button(`tool-${tool}`).setAttribute(
+        "aria-pressed",
+        String(session.tool === tool),
+      );
+    button("tool-draw").disabled = session.view !== "notes";
+    element<HTMLSelectElement>("grid").value = String(session.grid);
+    if (!navigation.look)
+      world.renderer.domElement.style.cursor =
+        session.view !== "notes" || session.tool === "select"
+          ? "default"
+          : session.tool === "draw"
+            ? "cell"
+            : "crosshair";
     const note = waveform ? undefined : session.store.selected;
+    const count = waveform ? 0 : session.store.selectedNotes.length;
     element("note-inspector").hidden = !note;
-    if (note) {
+    if (count > 1) element("note-label").textContent = `${count} notes`;
+    else if (note) {
       const pitchNames = [
         "C",
         "C♯",
@@ -342,8 +389,12 @@ async function start() {
       : "Select a note to edit";
     input("velocity").disabled = !note;
     input("velocity").value = String(note?.velocity ?? 0.7);
-    for (const id of ["shorter", "longer", "audition", "delete"])
+    for (const id of ["shorter", "longer", "duplicate", "audition", "delete"])
       button(id).disabled = !note;
+    for (const id of ["quantize", "cut", "copy"])
+      button(id).disabled = waveform || !count;
+    button("paste").disabled = waveform || !session.clipboard.length;
+    button("select-all").disabled = waveform;
     button("undo").disabled = waveform || !session.store.canUndo;
     button("redo").disabled = waveform || !session.store.canRedo;
     for (const id of ["add", "lower", "higher"]) button(id).disabled = waveform;
@@ -534,6 +585,26 @@ async function start() {
     closeMenus();
   });
   handle("delete", () => session.deleteNote());
+  handle("duplicate", () => session.duplicate());
+  handle("select-all", () => session.selectAll());
+  handle("quantize", () => session.quantize());
+  handle("cut", () => session.cut());
+  handle("copy", () => session.copy());
+  handle("paste", () => {
+    session.paste();
+    closeMenus();
+  });
+  for (const tool of Object.keys(TOOLS) as EditTool[])
+    handle(`tool-${tool}`, () => session.setTool(tool));
+  element<HTMLSelectElement>("grid").onchange = () =>
+    session.setGrid(
+      Number(element<HTMLSelectElement>("grid").value) as GridDivision,
+    );
+  // A tap on empty space clears the selection, as in most editors.
+  navigation.onTap = () => {
+    if (session.view !== "waveform" && session.store.selectedIds.length)
+      session.store.select(null);
+  };
   handle("audition", async () => {
     if (session.store.selected)
       await session.audio.audition(session.store.selected, session.track?.gain);
@@ -602,12 +673,8 @@ async function start() {
           const t = p.tracks.find((t) => t.id === session.trackId);
           if (t) t.muted = input("mute").checked;
         });
-  input("velocity").onchange = () => {
-    if (session.store.selected)
-      session.store.updateNote(session.store.selected.id, {
-        velocity: Number(input("velocity").value),
-      });
-  };
+  input("velocity").onchange = () =>
+    session.setVelocity(Number(input("velocity").value));
   const fileName = () =>
     session.store.project.name.replace(/[^\w -]/g, "").trim() || "xr-daw";
   handle("save", () =>
@@ -754,11 +821,35 @@ async function start() {
       event.preventDefault();
       session.deleteNote();
     }
-    if ((event.ctrlKey || event.metaKey) && event.code === "KeyZ") {
+    const command = event.ctrlKey || event.metaKey;
+    if (command && event.code === "KeyZ") {
       event.preventDefault();
       event.shiftKey ? session.store.redo() : session.store.undo();
     }
-    if (event.code.startsWith("Arrow") && session.store.selected) {
+    const commands: Record<string, () => void> = {
+      KeyA: () => session.selectAll(),
+      KeyC: () => session.copy(),
+      KeyX: () => session.cut(),
+      KeyV: () => session.paste(),
+      KeyD: () => session.duplicate(),
+    };
+    const keys: Record<string, () => void> = {
+      KeyV: () => session.setTool("select"),
+      KeyB: () => session.setTool("draw"),
+      KeyE: () => session.setTool("erase"),
+      KeyQ: () => session.quantize(),
+      Escape: () => session.store.select(null),
+    };
+    const shortcut = command
+      ? commands[event.code]
+      : event.altKey || event.shiftKey
+        ? undefined
+        : keys[event.code];
+    if (shortcut) {
+      event.preventDefault();
+      shortcut();
+    }
+    if (event.code.startsWith("Arrow") && session.store.selectedNotes.length) {
       event.preventDefault();
       if (event.shiftKey && ["ArrowLeft", "ArrowRight"].includes(event.code))
         session.resize(event.code === "ArrowLeft" ? -1 : 1);

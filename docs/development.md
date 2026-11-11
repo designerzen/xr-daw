@@ -25,6 +25,7 @@ npm run test:browser
 npm run test:navigation
 npm run test:camera
 npm run test:scroll
+npm run test:editing
 npm run test:media
 npm run test:vinyl
 npm run test:xr
@@ -40,6 +41,8 @@ The navigation test reaches the final section of a 24-bar fixture, follows playb
 The camera test loads a two-track song and checks that every camera mode fits the board between the overlaid controls, that clicking a note selects it in each parallel view, and that zoom and reset work.
 
 The scroll test plays a 24-bar song in scroll mode and checks that the playhead stays centred while the notes move, that the scrubber follows and seeks, that off-screen notes cannot be picked, and that switching back lands on the playhead's page.
+
+The editing test uses real mouse input to draw a note with the Draw tool (checking the hover preview and grid cell), build a selection with Ctrl-click, repeat it with Ctrl+D, clear it with a tap on empty space, erase a note, and undo.
 
 The AR test enters an emulated passthrough session and checks that the studio backdrop and floor give way to the room and return on exit.
 

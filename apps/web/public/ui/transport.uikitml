@@ -39,6 +39,15 @@
       <Button id="delete"><ButtonLabel>Delete</ButtonLabel></Button>
     </div>
     <div class="row">
+      <Button id="tool"><ButtonLabel id="tool-label">Select</ButtonLabel></Button>
+      <Button id="grid"><ButtonLabel id="grid-label">Grid 1/16</ButtonLabel></Button>
+      <Button id="select-all"><ButtonLabel>All</ButtonLabel></Button>
+      <Button id="copy"><ButtonLabel>Copy</ButtonLabel></Button>
+      <Button id="paste"><ButtonLabel>Paste</ButtonLabel></Button>
+      <Button id="duplicate"><ButtonLabel>Repeat</ButtonLabel></Button>
+      <Button id="quantize"><ButtonLabel>Quantize</ButtonLabel></Button>
+    </div>
+    <div class="row">
       <Button id="undo"><ButtonLabel>Undo</ButtonLabel></Button>
       <Button id="redo"><ButtonLabel>Redo</ButtonLabel></Button>
     </div>

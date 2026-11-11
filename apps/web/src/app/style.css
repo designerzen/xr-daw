@@ -395,6 +395,41 @@ input[type="range"] {
   background: #d8e8e2;
   color: #17251f;
 }
+.edit-tools {
+  z-index: 4;
+  position: absolute;
+  left: 20px;
+  top: 130px;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px;
+  background: #151c27dd;
+  border: 1px solid #ffffff12;
+  border-radius: 18px;
+}
+.edit-tools [aria-pressed="true"] {
+  background: #d8e8e2;
+  color: #17251f;
+}
+.edit-tools button:disabled {
+  opacity: 0.35;
+}
+#grid {
+  width: 34px;
+  min-height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: #ffffff0d;
+  font-size: 10px;
+  text-align: center;
+  appearance: none;
+}
+#grid option {
+  background: #151c27;
+}
+.audio-mode .edit-tools {
+  display: none;
+}
 .pitch-tools {
   display: flex;
   flex-direction: column;
@@ -525,10 +560,15 @@ input[type="range"] {
     right: 10px;
     padding: 3px;
   }
+  .edit-tools {
+    left: 10px;
+    padding: 3px;
+  }
 }
 @media (pointer: coarse) {
   .scene-tools .icon-button,
   .scene-tools summary,
+  .edit-tools .icon-button,
   .timeline-navigation .icon-button {
     width: 44px;
     height: 44px;

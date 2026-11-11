@@ -1,11 +1,22 @@
 import { AudioEngine } from "./audio";
 import { ClipPlayer, type AudioClip } from "./clip-player";
-import { ProjectStore, projectEnd, snapTick, type Project } from "./project";
+import {
+  ProjectStore,
+  projectEnd,
+  snapTick,
+  type Note,
+  type Project,
+} from "./project";
 
 export const ALL_TRACKS = "*";
 const MIN_PITCH_ROWS = 24;
 /** Pages flip a whole view at a time; scroll keeps the playhead centred and moves the music. */
 export type TimelineMode = "pages" | "scroll";
+/** Select picks and drags notes, Draw adds one wherever the board is clicked, Erase removes them. */
+export type EditTool = "select" | "draw" | "erase";
+/** Grid steps per beat: 1 is quarter notes, 4 sixteenths, 0 turns snapping off. */
+export const GRID_DIVISIONS = [1, 2, 4, 8, 0] as const;
+export type GridDivision = (typeof GRID_DIVISIONS)[number];
 
 export class Session {
   readonly store: ProjectStore;
@@ -21,6 +32,13 @@ export class Session {
   trackId: string;
   allTracks = true;
   view: "notes" | "velocity" | "waveform" = "notes";
+  tool: EditTool = "select";
+  grid: GridDivision = 4;
+  /** New notes take the length and velocity of the note last drawn, resized or picked. */
+  drawLength: number;
+  drawVelocity = 0.7;
+  /** Copied notes, with starts relative to the earliest one. */
+  clipboard: Note[] = [];
   private listeners = new Set<() => void>();
   private revision = 0;
   private unsubscribe: () => void;
@@ -28,6 +46,7 @@ export class Session {
 
   constructor(project: Project) {
     this.store = new ProjectStore(project);
+    this.drawLength = this.store.project.ppq;
     this.trackId = project.tracks[0]?.id ?? "";
     this.fitPitch();
     this.unsubscribe = this.store.subscribe(() => {
@@ -182,6 +201,7 @@ export class Session {
     this.trackId = project.tracks[0]?.id ?? "";
     this.allTracks = true;
     this.store.replace(project);
+    this.drawLength = this.store.project.ppq;
     this.fitPitch();
     this.emit();
   }
@@ -263,56 +283,181 @@ export class Session {
     this.followPlayback = true;
     this.emit();
   }
-  resize(direction: number) {
-    if (this.view === "waveform") return;
+  setTool(tool: EditTool) {
+    this.tool = tool;
+    this.emit();
+  }
+  setGrid(grid: GridDivision) {
+    this.grid = grid;
+    this.emit();
+  }
+  /** One grid step in ticks; with snapping off, nudges and resizes still step a sixteenth. */
+  get gridStep() {
+    const ppq = this.store.project.ppq;
+    return this.grid > 0 ? ppq / this.grid : ppq / 4;
+  }
+  snap(tick: number) {
+    return snapTick(tick, this.store.project.ppq, this.grid);
+  }
+  /** Remember a note's shape for the next one drawn. */
+  private remember(note: Note) {
+    this.drawLength = note.duration;
+    this.drawVelocity = note.velocity;
+  }
+  /** Pick a note. Additive picks toggle it; picking part of a group keeps the group for dragging. */
+  pick(id: string, additive = false) {
+    if (additive) this.store.toggleSelected(id);
+    else if (this.store.isSelected(id))
+      this.store.selectMany([
+        ...this.store.selectedIds.filter((other) => other !== id),
+        id,
+      ]);
+    else this.store.select(id);
     const note = this.store.selected;
-    const step = this.store.project.ppq / 4;
-    if (note)
-      this.store.updateNote(note.id, {
-        duration: Math.max(
-          step,
-          snapTick(note.duration + direction * step, this.store.project.ppq),
-        ),
-      });
+    if (note) this.remember(note);
+  }
+  selectAll() {
+    if (this.view === "waveform") return;
+    this.store.selectMany(this.shownNotes.map((n) => n.id));
+  }
+  private get editable() {
+    return this.view !== "waveform" && this.store.selectedNotes.length > 0;
+  }
+  resize(direction: number) {
+    if (!this.editable) return;
+    const step = this.gridStep;
+    this.store.updateNotes(this.store.selectedIds, (note) => {
+      note.duration = Math.max(
+        step,
+        Math.round((note.duration + direction * step) / step) * step,
+      );
+    });
+    if (this.store.selected) this.remember(this.store.selected);
   }
   nudge(time: number, pitch: number) {
-    if (this.view === "waveform") return;
-    const note = this.store.selected;
-    if (note)
-      this.store.updateNote(note.id, {
-        start: snapTick(
-          note.start + (time * this.store.project.ppq) / 4,
-          this.store.project.ppq,
-        ),
-        pitch: Math.max(0, Math.min(127, note.pitch + pitch)),
-      });
+    if (!this.editable) return;
+    this.move(time * this.gridStep, pitch);
+  }
+  /** Move the selection together, kept after the song's start and inside the MIDI pitch range. */
+  move(ticks: number, pitch: number) {
+    const notes = this.store.selectedNotes;
+    if (!notes.length) return;
+    const first = Math.min(...notes.map((n) => n.start));
+    const low = Math.min(...notes.map((n) => n.pitch));
+    const high = Math.max(...notes.map((n) => n.pitch));
+    const offset = Math.max(-first, ticks);
+    const shift = Math.max(-low, Math.min(127 - high, pitch));
+    this.store.updateNotes(this.store.selectedIds, (note) => {
+      note.start = this.snap(note.start + offset);
+      note.pitch += shift;
+    });
+  }
+  setVelocity(velocity: number) {
+    if (!this.editable) return;
+    this.store.updateNotes(this.store.selectedIds, (note) => {
+      note.velocity = velocity;
+    });
+    this.drawVelocity = velocity;
+  }
+  /** Snap the selected notes' starts and ends to the grid. */
+  quantize() {
+    if (!this.editable) return;
+    const ppq = this.store.project.ppq;
+    const division = this.grid || 4;
+    const step = ppq / division;
+    this.store.updateNotes(this.store.selectedIds, (note) => {
+      const start = snapTick(note.start, ppq, division);
+      const end = snapTick(note.start + note.duration, ppq, division);
+      note.start = start;
+      note.duration = Math.max(step, end - start);
+    });
+  }
+  /** Where pasted and added notes go: the playhead when it is in view, otherwise the view's start. */
+  get insertTick() {
+    const tick = this.audio.positionTick;
+    const start = this.viewStart;
+    return tick >= start && tick < start + this.pageSize
+      ? this.snap(tick)
+      : start;
+  }
+  private insert(notes: Omit<Note, "id">[]) {
+    const ids = notes.map(() => crypto.randomUUID());
+    this.store.edit((p) =>
+      notes.forEach((note, i) => p.notes.push({ ...note, id: ids[i] })),
+    );
+    this.store.selectMany(ids);
+    return ids;
+  }
+  /** Add a note on the active track, in the grid cell holding the tick. */
+  drawNote(tick: number, pitch: number) {
+    if (this.view === "waveform" || !this.trackId) return;
+    const ppq = this.store.project.ppq;
+    const step = this.grid > 0 ? ppq / this.grid : 1;
+    return this.insert([
+      {
+        trackId: this.trackId,
+        pitch: Math.max(0, Math.min(127, Math.round(pitch))),
+        start: Math.max(0, Math.floor(tick / step) * step),
+        duration: this.drawLength,
+        velocity: this.drawVelocity,
+      },
+    ])[0];
   }
   addNote() {
     if (this.view === "waveform") return;
-    if (!this.trackId) return;
-    const id = crypto.randomUUID();
-    this.store.edit((p) =>
-      p.notes.push({
-        id,
-        trackId: this.trackId,
-        pitch: Math.min(127, this.basePitch + 12),
-        start:
-          this.timeline === "scroll"
-            ? snapTick(this.audio.positionTick, p.ppq)
-            : this.pageTick,
-        duration: p.ppq,
-        velocity: 0.7,
-      }),
-    );
-    this.store.select(id);
+    this.drawNote(this.insertTick, Math.min(127, this.basePitch + 12));
+  }
+  erase(id: string) {
+    if (this.view === "waveform") return;
+    this.store.edit((p) => {
+      p.notes = p.notes.filter((n) => n.id !== id);
+    });
+    this.store.selectMany(this.store.selectedIds.filter((s) => s !== id));
   }
   deleteNote() {
-    if (this.view === "waveform") return;
-    if (!this.store.selectedId) return;
+    if (!this.editable) return;
+    const ids = new Set(this.store.selectedIds);
     this.store.edit((p) => {
-      p.notes = p.notes.filter((n) => n.id !== this.store.selectedId);
+      p.notes = p.notes.filter((n) => !ids.has(n.id));
     });
     this.store.select(null);
+  }
+  copy() {
+    const notes = this.store.selectedNotes;
+    if (this.view === "waveform" || !notes.length) return;
+    const first = Math.min(...notes.map((n) => n.start));
+    this.clipboard = notes.map((n) => ({ ...n, start: n.start - first }));
+    this.emit();
+  }
+  cut() {
+    if (!this.editable) return;
+    this.copy();
+    this.deleteNote();
+  }
+  paste() {
+    if (this.view === "waveform" || !this.clipboard.length) return;
+    const tracks = new Set(this.store.project.tracks.map((t) => t.id));
+    const at = this.insertTick;
+    this.insert(
+      this.clipboard.map(({ id: _id, ...note }) => ({
+        ...note,
+        // Notes copied from a track that has since gone land on the active one.
+        trackId: tracks.has(note.trackId) ? note.trackId : this.trackId,
+        start: note.start + at,
+      })),
+    );
+  }
+  /** Repeat the selection straight after itself, rounded up to whole grid steps. */
+  duplicate() {
+    const notes = this.store.selectedNotes;
+    if (this.view === "waveform" || !notes.length) return;
+    const first = Math.min(...notes.map((n) => n.start));
+    const last = Math.max(...notes.map((n) => n.start + n.duration));
+    const step = this.grid > 0 ? this.store.project.ppq / this.grid : 1;
+    const span = Math.ceil((last - first) / step) * step;
+    this.insert(
+      notes.map(({ id: _id, ...n }) => ({ ...n, start: n.start + span })),
+    );
   }
   dispose() {
     this.unsubscribe();
