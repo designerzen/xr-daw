@@ -910,6 +910,16 @@ async function start() {
   window.addEventListener("pagehide", dispose, { once: true });
   if (import.meta.hot) import.meta.hot.dispose(dispose);
   status("Ready · autosaves on this device");
+  // index.html reloads once if a stale cached page asks for files a newer deploy removed.
+  (window as { __xrDawStarted?: boolean }).__xrDawStarted = true;
+  try {
+    sessionStorage.removeItem("xr-daw.boot-reload");
+    const url = new URL(location.href);
+    if (url.searchParams.has("v")) {
+      url.searchParams.delete("v");
+      history.replaceState(history.state, "", url.href);
+    }
+  } catch {}
 }
 
 void start().catch(report);

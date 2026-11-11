@@ -5,10 +5,108 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#10151f" />
     <title>XR DAW · Spatial sequencer</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2310151f'/%3E%3Crect x='6' y='9' width='12' height='4' rx='1' fill='%23d8e8e2'/%3E%3Crect x='12' y='19' width='14' height='4' rx='1' fill='%238fb8ff'/%3E%3C/svg%3E"
+    />
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #10151f;
+        color: #d8e2f0;
+        font-family: system-ui, sans-serif;
+      }
+      .boot {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-content: center;
+        gap: 12px;
+        text-align: center;
+        font-size: 14px;
+      }
+      .boot button {
+        font: inherit;
+        padding: 8px 18px;
+        border: 1px solid #ffffff30;
+        border-radius: 20px;
+        background: #151c27;
+        color: inherit;
+        cursor: pointer;
+        pointer-events: auto;
+      }
+    </style>
+    <script>
+      // GitHub Pages caches this page for ten minutes, but each deploy removes the previous
+      // build's hashed files. A stale page then asks for scripts that no longer exist, so
+      // reload once from a fresh address; if that fails too, say so instead of staying blank.
+      (function () {
+        var key = "xr-daw.boot-reload";
+        var failed = false;
+        function recover(reason) {
+          if (failed || window.__xrDawStarted) return;
+          failed = true;
+          var retried = false;
+          try {
+            retried = sessionStorage.getItem(key) === "1";
+            sessionStorage.setItem(key, "1");
+          } catch (error) {}
+          if (!retried) {
+            var url = new URL(location.href);
+            url.searchParams.set("v", String(Date.now()));
+            location.replace(url.href);
+            return;
+          }
+          function show() {
+            var root = document.getElementById("controls");
+            if (!root) return;
+            root.innerHTML =
+              '<div class="boot" role="alert"><p>XR DAW could not load (' +
+              String(reason).replace(/[<>&]/g, "") +
+              ').</p><p><button type="button" onclick="location.reload()">Reload</button></p></div>';
+          }
+          if (document.readyState === "loading")
+            document.addEventListener("DOMContentLoaded", show);
+          else show();
+        }
+        // Failed script and stylesheet loads do not bubble, so listen in the capture phase.
+        window.addEventListener(
+          "error",
+          function (event) {
+            var target = event.target;
+            if (
+              target &&
+              (target.tagName === "SCRIPT" || target.tagName === "LINK")
+            )
+              recover(
+                "missing " +
+                  (target.src || target.href || "file").split("/").pop(),
+              );
+          },
+          true,
+        );
+        window.addEventListener("vite:preloadError", function (event) {
+          event.preventDefault();
+          recover("missing module");
+        });
+        window.addEventListener("unhandledrejection", function (event) {
+          var message = String(event.reason && event.reason.message);
+          if (
+            /dynamically imported module|Importing a module script failed|error loading dynamically imported/i.test(
+              message,
+            )
+          )
+            recover("missing module");
+        });
+      })();
+    </script>
   </head>
   <body>
     <div id="scene-container"></div>
-    <main id="controls" aria-label="Sequencer controls"></main>
+    <main id="controls" aria-label="Sequencer controls">
+      <div class="boot"><p>Loading studio…</p></div>
+    </main>
     <script type="module" src="/src/app/main.ts"></script>
   </body>
 </html>
