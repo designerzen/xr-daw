@@ -61,6 +61,8 @@ In the flat and oblique views, drag empty space to pan and scroll or pinch to zo
 
 The visible timeline strip offers **4 bars**, **16 bars**, or the entire **Song**. Use its arrows and slider to reach any section; the counter shows the current bars and total length. **Follow** advances the visible section during playback. Navigating manually turns Follow off; enable it again to return to the playhead. The pitch axis covers every shown note in the whole song, so parts never drop out of view as you page. The pitch arrows move it by an octave. These controls are also available in the VR transport.
 
+Choose **Scroll** in the timeline strip for a continuous view instead of pages. The playhead travels to the middle of the board and stays there while the music scrolls in from the right, and the slider becomes a song-position scrubber. The page arrows and Follow are hidden in this mode. In VR, the transport's **Scroll** button switches modes, and Prev and Next step a quarter of the view. Your choice is remembered on this device; add `?timeline=scroll` or `?timeline=pages` to the address to choose one for a link.
+
 ## Keyboard controls
 
 | Key | Action |

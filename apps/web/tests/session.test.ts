@@ -134,3 +134,30 @@ test("every track is shown at once and the pitch axis covers the whole song", ()
   assert.equal(session.allTracks, true);
   session.dispose();
 });
+
+test("scroll mode centres the playhead once it reaches the middle of the view", async () => {
+  const project = demoProject();
+  project.notes[0].start = 480 * 4 * 23;
+  const session = new Session(project);
+  let position = 0;
+  Object.defineProperty(session.audio, "positionTick", { get: () => position });
+  session.setTimeline("scroll");
+  const view = session.pageSize;
+  // Before the middle the view rests at the start, so the playhead walks in.
+  position = view / 4;
+  assert.equal(session.viewStart, 0);
+  // Past the middle the view trails the playhead by half a view.
+  position = view * 2.3;
+  assert.equal(session.viewStart, position - view / 2);
+  assert.ok(session.visibleNotes.every((n) => n.start < position + view / 2));
+  // At the end the view stops so the song never scrolls off the board.
+  position = 480 * 4 * 24 - 1;
+  assert.equal(session.viewStart, 480 * 4 * 24 - view);
+  session.followPlayhead();
+  assert.equal(session.pageTick, 0, "page following is off while scrolling");
+  // Returning to pages lands on the page holding the playhead.
+  position = 480 * 4 * 9;
+  session.setTimeline("pages");
+  assert.equal(session.pageTick, 480 * 4 * 8);
+  session.dispose();
+});

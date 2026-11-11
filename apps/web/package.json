@@ -16,6 +16,7 @@
     "test:browser": "iwsdk browser run tests/browser-smoke.mjs --timeout 110000",
     "test:navigation": "iwsdk browser run tests/browser-navigation.mjs --timeout 110000",
     "test:camera": "iwsdk browser run tests/browser-camera.mjs --timeout 110000",
+    "test:scroll": "iwsdk browser run tests/browser-scroll.mjs --timeout 110000",
     "test:media": "iwsdk browser run tests/browser-media.mjs --timeout 110000",
     "test:vinyl": "iwsdk browser run tests/browser-vinyl.mjs --timeout 110000",
     "test:xr": "iwsdk browser run tests/xr-enter.mjs",

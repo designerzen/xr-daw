@@ -16,11 +16,13 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   MovementMode,
+  Plane,
   PlaneGeometry,
   RayInteractable,
   Sprite,
   SpriteMaterial,
   UIKitMLAsset,
+  Vector3,
 } from "@iwsdk/core";
 import { NoteView } from "./components";
 import { projectEnd, snapTick, type Note } from "./project";
@@ -75,6 +77,21 @@ export function sequencerSystem(session: Session) {
     private viewPivot = new Group();
     private content = new Group();
     private contentEntity!: Entity;
+    // Everything placed in time lives on this strip, which slides past the playhead.
+    private strip = new Group();
+    private stripEntity!: Entity;
+    private stripStart = 0;
+    private stripLength = 0;
+    private timelineLabel = "";
+    // World planes at the board's time edges. Labels get a little room to overhang.
+    private clip = [
+      new Plane(new Vector3(1, 0, 0), -LEFT),
+      new Plane(new Vector3(-1, 0, 0), LEFT + WIDTH),
+    ];
+    private labelClip = [
+      new Plane(new Vector3(1, 0, 0), -(LEFT - 0.2)),
+      new Plane(new Vector3(-1, 0, 0), LEFT + WIDTH + 0.2),
+    ];
     // A sheet through the whole velocity depth, so it reads from any camera angle.
     private playhead = new Mesh(
       new PlaneGeometry(MAX_NOTE_DEPTH + 0.1, HEIGHT),
@@ -108,6 +125,13 @@ export function sequencerSystem(session: Session) {
         this.content,
         pivotEntity,
       );
+      this.strip.name = "Timeline strip";
+      this.strip.userData.fitIgnore = true;
+      this.stripEntity = this.world.createTransformEntity(
+        this.strip,
+        this.contentEntity,
+      );
+      this.world.renderer.localClippingEnabled = true;
       this.scene.background = this.backdrop;
       const ambient = new AmbientLight(0xffffff, 0.9);
       const light = new DirectionalLight(0xffffff, 2.2);
@@ -181,6 +205,10 @@ export function sequencerSystem(session: Session) {
         previous: () => session.page(-1),
         next: () => session.page(1),
         follow: () => session.toggleFollow(),
+        scroll: () =>
+          session.setTimeline(
+            session.timeline === "scroll" ? "pages" : "scroll",
+          ),
         span: () =>
           session.setViewSpan(
             session.viewSpan === 4 ? 16 : session.viewSpan === 16 ? "song" : 4,
@@ -199,12 +227,7 @@ export function sequencerSystem(session: Session) {
         add: () => session.addNote(),
         delete: () => session.deleteNote(),
         seek: () => {
-          if (session.view === "waveform")
-            void session.clipPlayer.play(0).catch(session.onError);
-          else
-            void session.audio
-              .play(session.store.project, session.pageTick)
-              .catch(session.onError);
+          void session.playFromView().catch(session.onError);
         },
         track: () => {
           // Cycle All tracks -> each track -> All tracks.
@@ -238,10 +261,8 @@ export function sequencerSystem(session: Session) {
     private decorate() {
       this.decorations.forEach((entity) => entity.dispose());
       this.decorations = [];
-      const add = (object: Mesh | Sprite) =>
-        this.decorations.push(
-          this.world.createTransformEntity(object, this.contentEntity),
-        );
+      const add = (object: Mesh | Sprite, parent = this.contentEntity) =>
+        this.decorations.push(this.world.createTransformEntity(object, parent));
       const board = new Mesh(
         new BoxGeometry(WIDTH + 0.03, HEIGHT + 0.03, 0.025),
         new MeshBasicMaterial({ color: 0x182232 }),
@@ -273,30 +294,37 @@ export function sequencerSystem(session: Session) {
       const velocityLabel = label("Velocity", LEFT - 0.06, BOTTOM - 0.13, 0.25);
       velocityLabel.position.z = Z + MAX_NOTE_DEPTH / 2;
       add(velocityLabel);
-      const bars = session.pageSize / session.store.project.ppq / 4;
+      // Grid density follows the visible span; the strip may hold several spans.
+      const beat = session.store.project.ppq;
+      const bars = session.pageSize / beat / 4;
       const minorStep = Math.max(1, Math.ceil(bars / 16));
       const majorStep = Math.max(4, Math.ceil(bars / 4) * 4);
-      for (let beat = 0; beat <= bars * 4; beat += minorStep) {
+      const firstBeat = this.stripStart / beat;
+      for (
+        let index = firstBeat;
+        index <= firstBeat + this.stripLength / beat;
+        index += minorStep
+      ) {
         const line = new Mesh(
           new BoxGeometry(0.002, HEIGHT, 0.002),
           new MeshBasicMaterial({
-            color: beat % majorStep ? 0x28364b : 0x546581,
+            color: index % majorStep ? 0x28364b : 0x546581,
+            clippingPlanes: this.clip,
           }),
         );
         line.position.set(
-          LEFT + (beat * WIDTH) / (bars * 4),
+          this.stripX(index * beat),
           BOTTOM + HEIGHT / 2,
           Z - 0.015,
         );
-        add(line);
-        if (beat % majorStep === 0)
-          add(
-            label(
-              `Bar ${Math.floor(session.pageTick / session.store.project.ppq / 4) + beat / 4 + 1}`,
-              line.position.x,
-              2.29,
-            ),
-          );
+        line.userData.tick = index * beat;
+        add(line, this.stripEntity);
+        if (index % majorStep === 0) {
+          const bar = label(`Bar ${index / 4 + 1}`, line.position.x, 2.29);
+          bar.material.clippingPlanes = this.labelClip;
+          bar.userData.tick = index * beat;
+          add(bar, this.stripEntity);
+        }
       }
       const row = HEIGHT / session.pitchRows;
       for (let pitch = 0; pitch <= session.pitchRows; pitch++) {
@@ -329,18 +357,43 @@ export function sequencerSystem(session: Session) {
       );
     }
 
+    /** Strip-local x of a tick; the strip itself is offset by the view position. */
+    private stripX(tick: number) {
+      return LEFT + ((tick - this.stripStart) / session.pageSize) * WIDTH;
+    }
+
+    /** Pages show exactly one view. Scroll preloads a view either side so it rebuilds rarely. */
+    private stripRange() {
+      if (session.timeline === "pages")
+        return { start: session.pageTick, length: session.pageSize };
+      const bar = session.store.project.ppq * 4;
+      const songEnd = Math.ceil(projectEnd(session.store.project) / bar) * bar;
+      const start = Math.max(
+        0,
+        Math.floor(session.viewStart / session.pageSize - 1) * session.pageSize,
+      );
+      return {
+        start,
+        length: Math.max(
+          session.pageSize,
+          Math.min(3 * session.pageSize, songEnd - start),
+        ),
+      };
+    }
+
     private rebuild() {
       this.noteEntities.forEach((entity) => entity.dispose());
       this.noteEntities = [];
+      const range = this.stripRange();
+      this.stripStart = range.start;
+      this.stripLength = range.length;
       this.decorate();
       const row = HEIGHT / session.pitchRows;
       const tracks = session.trackIndex;
-      for (const note of session.visibleNotes) {
-        const start = Math.max(session.pageTick, note.start);
-        const end = Math.min(
-          session.pageTick + session.pageSize,
-          note.start + note.duration,
-        );
+      const stripEnd = this.stripStart + this.stripLength;
+      for (const note of session.notesBetween(this.stripStart, stripEnd)) {
+        const start = Math.max(this.stripStart, note.start);
+        const end = Math.min(stripEnd, note.start + note.duration);
         const width = Math.max(
           0.012,
           ((end - start) / session.pageSize) * WIDTH - 0.003,
@@ -356,6 +409,7 @@ export function sequencerSystem(session: Session) {
           ),
           roughness: 0.65,
           emissive: 0x000000,
+          clippingPlanes: this.clip,
         });
         const depth = noteDepth(note.velocity);
         const centerZ = Z + depth / 2;
@@ -364,9 +418,7 @@ export function sequencerSystem(session: Session) {
           material,
         );
         mesh.position.set(
-          LEFT +
-            ((start - session.pageTick) / session.pageSize) * WIDTH +
-            width / 2,
+          this.stripX(start) + width / 2,
           BOTTOM + (note.pitch - session.basePitch + 0.5) * row,
           centerZ,
         );
@@ -386,16 +438,14 @@ export function sequencerSystem(session: Session) {
             opacity: 0,
             blending: AdditiveBlending,
             depthWrite: false,
+            clippingPlanes: this.clip,
           }),
         );
         halo.scale.set(width + 0.02, row * 1.5, depth + 0.02);
         halo.visible = false;
         halo.raycast = () => {};
         mesh.add(halo);
-        const entity = this.world.createTransformEntity(
-          mesh,
-          this.contentEntity,
-        );
+        const entity = this.world.createTransformEntity(mesh, this.stripEntity);
         entity
           .addComponent(NoteView)
           .addComponent(RayInteractable)
@@ -404,7 +454,7 @@ export function sequencerSystem(session: Session) {
             scale: false,
             movementMode: MovementMode.MoveFromTarget,
             translateMin: [LEFT, BOTTOM, centerZ],
-            translateMax: [LEFT + WIDTH, BOTTOM + HEIGHT, centerZ],
+            translateMax: [this.stripX(stripEnd), BOTTOM + HEIGHT, centerZ],
           });
         const select = () => {
           session.store.select(note.id);
@@ -422,7 +472,23 @@ export function sequencerSystem(session: Session) {
     }
 
     private layoutKey() {
-      return `${session.pageTick}:${session.basePitch}:${session.pitchRows}:${session.allTracks || session.trackId}:${session.store.project.ppq}:${session.pageSize}`;
+      const range = this.stripRange();
+      return `${range.start}:${range.length}:${session.basePitch}:${session.pitchRows}:${session.allTracks || session.trackId}:${session.store.project.ppq}:${session.pageSize}`;
+    }
+
+    private updateTimelineLabel(viewStart: number, viewEnd: number) {
+      const bar = session.store.project.ppq * 4;
+      const total = Math.ceil(projectEnd(session.store.project) / bar);
+      const text =
+        session.timeline === "scroll"
+          ? `Bar ${Math.floor(session.audio.positionTick / bar) + 1} / ${total}`
+          : `Bars ${Math.floor(viewStart / bar) + 1}-${Math.min(Math.ceil(viewEnd / bar), total)} / ${total}`;
+      if (text === this.timelineLabel) return;
+      this.timelineLabel = text;
+      this.world
+        .requireSceneObject<UIKitMLAsset>("transport")
+        .requireElementById("timeline-label")
+        .setProperties({ text });
     }
 
     update(delta: number) {
@@ -481,14 +547,13 @@ export function sequencerSystem(session: Session) {
         this.viewPivot.rotation.x =
           session.view === "velocity" ? -Math.PI / 2 : 0;
         const panel = this.world.requireSceneObject<UIKitMLAsset>("transport");
+        const scrolling = session.timeline === "scroll";
         panel.requireElementById("follow").setProperties({
           backgroundOpacity: session.followPlayback ? 0.25 : 0.04,
+          display: scrolling ? "none" : "flex",
         });
-        const firstBar = session.pageTick / session.store.project.ppq / 4 + 1;
-        const totalBars =
-          projectEnd(session.store.project) / session.store.project.ppq / 4;
-        panel.requireElementById("timeline-label").setProperties({
-          text: `Bars ${firstBar}-${Math.min(firstBar + session.pageSize / session.store.project.ppq / 4 - 1, totalBars)} / ${totalBars}`,
+        panel.requireElementById("scroll").setProperties({
+          backgroundOpacity: scrolling ? 0.25 : 0.04,
         });
         panel.requireElementById("span-label").setProperties({
           text:
@@ -510,19 +575,36 @@ export function sequencerSystem(session: Session) {
           panel.requireElementById(`view-${view}`).setProperties({
             backgroundOpacity: session.view === view ? 0.25 : 0.04,
           });
-        if (
-          this.revision !== session.store.revision ||
-          this.layoutKey() !== this.viewKey
-        )
-          this.rebuild();
+        if (this.revision !== session.store.revision) this.rebuild();
         this.dirty = false;
       }
+      // Scrolling moves the strip every frame and swaps it for a fresh one near its end.
+      if (!this.dragging.size && this.layoutKey() !== this.viewKey)
+        this.rebuild();
       const tick = session.audio.positionTick;
       if (!this.dragging.size) session.followPlayhead();
-      this.playhead.visible =
-        tick >= session.pageTick && tick <= session.pageTick + session.pageSize;
+      const viewStart = session.viewStart;
+      const viewEnd = viewStart + session.pageSize;
+      this.strip.position.x =
+        -((viewStart - this.stripStart) / session.pageSize) * WIDTH;
+      this.playhead.visible = tick >= viewStart && tick <= viewEnd;
       this.playhead.position.x =
-        LEFT + ((tick - session.pageTick) / session.pageSize) * WIDTH;
+        LEFT + ((tick - viewStart) / session.pageSize) * WIDTH;
+      this.updateTimelineLabel(viewStart, viewEnd);
+      // Off-screen parts of the strip are hidden, not just clipped, so they cannot be picked.
+      for (const entity of this.decorations) {
+        const object = entity.object3D!;
+        if (object.userData.tick !== undefined)
+          object.visible =
+            object.userData.tick >= viewStart - 1 &&
+            object.userData.tick <= viewEnd + 1;
+      }
+      for (const entity of this.noteEntities) {
+        const data = entity.object3D!.userData;
+        if (!this.dragging.has(entity))
+          entity.object3D!.visible =
+            data.start < viewEnd && data.end > viewStart;
+      }
       // Sounding notes flash on their attack, glow while held, then fade out.
       for (const entity of this.noteEntities) {
         const mesh = entity.object3D as Mesh<BoxGeometry, MeshStandardMaterial>;

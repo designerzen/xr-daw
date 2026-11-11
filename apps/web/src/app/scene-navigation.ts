@@ -168,8 +168,11 @@ export class SceneNavigation {
       bounds = new Box3(),
       corner = new Vector3();
     this.scene.updateMatrixWorld();
+    const ignored = (object: Object3D | null): boolean =>
+      !!object && (!!object.userData.fitIgnore || ignored(object.parent));
     this.scene.traverseVisible((object) => {
-      if (object instanceof GridHelper) return;
+      // The scrolling strip runs past the board edges; the board and axes bound it.
+      if (object instanceof GridHelper || ignored(object)) return;
       if (!(object instanceof Mesh || object instanceof Sprite)) return;
       if (object.geometry.boundingBox === null)
         object.geometry.computeBoundingBox();

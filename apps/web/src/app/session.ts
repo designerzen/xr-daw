@@ -4,6 +4,8 @@ import { ProjectStore, projectEnd, snapTick, type Project } from "./project";
 
 export const ALL_TRACKS = "*";
 const MIN_PITCH_ROWS = 24;
+/** Pages flip a whole view at a time; scroll keeps the playhead centred and moves the music. */
+export type TimelineMode = "pages" | "scroll";
 
 export class Session {
   readonly store: ProjectStore;
@@ -12,6 +14,7 @@ export class Session {
   pageTick = 0;
   followPlayback = true;
   viewSpan: 4 | 16 | "song" = 4;
+  timeline: TimelineMode = "pages";
   basePitch = 48;
   pitchRows = 36;
   /** The active track receives new notes and the track controls; others may still be shown. */
@@ -77,6 +80,48 @@ export class Session {
       ? projectEnd(this.store.project)
       : this.store.project.ppq * this.viewSpan * 4;
   }
+  /** First tick on screen. In scroll mode it trails the playhead by half a view, within the song. */
+  get viewStart() {
+    if (this.timeline === "pages") return this.pageTick;
+    const end = projectEnd(this.store.project);
+    return Math.max(
+      0,
+      Math.min(
+        end - this.pageSize,
+        this.audio.positionTick - this.pageSize / 2,
+      ),
+    );
+  }
+  setTimeline(mode: TimelineMode) {
+    if (this.timeline === mode) return;
+    this.timeline = mode;
+    if (mode === "pages") {
+      // Land on the page holding the playhead, as Follow would.
+      const tick = Math.min(
+        projectEnd(this.store.project) - 1,
+        this.audio.positionTick,
+      );
+      this.pageTick = Math.floor(tick / this.pageSize) * this.pageSize;
+    }
+    this.emit();
+  }
+  /** Move the song position; in scroll mode this is how the view moves. */
+  async seekTo(tick: number) {
+    if (this.view === "waveform" || !Number.isFinite(tick)) return;
+    const end = projectEnd(this.store.project);
+    await this.audio.seek(
+      this.store.project,
+      Math.max(0, Math.min(end - 1, tick)),
+    );
+    this.emit();
+  }
+  async playFromView() {
+    if (this.view === "waveform") await this.clipPlayer.play(0);
+    else if (this.timeline === "scroll")
+      await this.audio.play(this.store.project, this.audio.positionTick);
+    else await this.audio.play(this.store.project, this.pageTick);
+    this.emit();
+  }
   setViewSpan(span: 4 | 16 | "song") {
     this.viewSpan = span;
     this.pageTick = Math.floor(this.pageTick / this.pageSize) * this.pageSize;
@@ -95,10 +140,13 @@ export class Session {
       : this.store.project.notes.filter((n) => n.trackId === this.trackId);
   }
   get visibleNotes() {
+    return this.notesBetween(this.viewStart, this.viewStart + this.pageSize);
+  }
+  notesBetween(from: number, to: number) {
     return this.shownNotes.filter(
       (n) =>
-        n.start < this.pageTick + this.pageSize &&
-        n.start + n.duration > this.pageTick &&
+        n.start < to &&
+        n.start + n.duration > from &&
         n.pitch >= this.basePitch &&
         n.pitch < this.basePitch + this.pitchRows,
     );
@@ -145,7 +193,12 @@ export class Session {
     this.emit();
   }
   page(direction: number) {
-    this.goToPage(this.pageTick / this.pageSize + direction);
+    // Scrolling steps a quarter of the view, so the music stays in sight.
+    if (this.timeline === "scroll")
+      void this.seekTo(
+        this.audio.positionTick + (direction * this.pageSize) / 4,
+      ).catch(this.onError);
+    else this.goToPage(this.pageTick / this.pageSize + direction);
   }
   goToPage(index: number) {
     if (this.view === "waveform") return;
@@ -167,7 +220,12 @@ export class Session {
     this.emit();
   }
   followPlayhead() {
-    if (!this.followPlayback || !this.audio.playing || this.view === "waveform")
+    if (
+      this.timeline === "scroll" ||
+      !this.followPlayback ||
+      !this.audio.playing ||
+      this.view === "waveform"
+    )
       return;
     const tick = Math.min(
       projectEnd(this.store.project) - 1,
@@ -238,7 +296,10 @@ export class Session {
         id,
         trackId: this.trackId,
         pitch: Math.min(127, this.basePitch + 12),
-        start: this.pageTick,
+        start:
+          this.timeline === "scroll"
+            ? snapTick(this.audio.positionTick, p.ppq)
+            : this.pageTick,
         duration: p.ppq,
         velocity: 0.7,
       }),

@@ -457,6 +457,18 @@ input[type="range"] {
 .timeline-navigation.single-page {
   width: auto;
 }
+/* Scrolling replaces page flipping: the slider scrubs the song instead. */
+.timeline-navigation.scrolling .icon-button,
+.timeline-navigation.scrolling #follow {
+  display: none;
+}
+#timeline-scroll {
+  border-radius: 20px;
+}
+#timeline-scroll[aria-pressed="true"] {
+  background: #d8e8e2;
+  color: #17251f;
+}
 .vinyl-control[hidden],
 .menu-panel label[hidden] {
   display: none;

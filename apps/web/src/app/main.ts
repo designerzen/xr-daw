@@ -4,7 +4,7 @@ import { encodeWav, exportWav } from "./audio";
 import { importMidi } from "./midi";
 import { restoreProject, saveProject } from "./persistence";
 import { demoProject, projectEnd, validateProject } from "./project";
-import { ALL_TRACKS, Session } from "./session";
+import { ALL_TRACKS, Session, type TimelineMode } from "./session";
 import { BOARD, sequencerSystem } from "./sequencer-system";
 import { waveformSystem } from "./waveform-system";
 import type { VinylCondition } from "./vinyl-playback";
@@ -83,6 +83,7 @@ root.innerHTML = `
     ${iconButton("next", "Next four bars", "next")}
     <output id="timeline-range" aria-live="polite"></output>
     <button id="follow" aria-pressed="true" title="Follow playback through the song">Follow</button>
+    <button id="timeline-scroll" aria-pressed="false" title="Scroll: keep the playhead centred and move the music past it">Scroll</button>
   </nav>
   <section class="transport" aria-label="Transport">
     ${iconButton("play", "Play", "play", "primary")}${iconButton("stop", "Stop", "stop")}
@@ -271,26 +272,18 @@ async function start() {
     element<HTMLSelectElement>("timeline-span").value = String(
       session.viewSpan,
     );
+    const scrolling = session.timeline === "scroll";
+    element("timeline-navigation").classList.toggle("scrolling", scrolling);
+    // A scrolling timeline always offers the scrubber, even for a short song.
     element("timeline-navigation").classList.toggle(
       "single-page",
-      projectEnd(project) <= session.pageSize,
+      !scrolling && projectEnd(project) <= session.pageSize,
     );
-    const totalBars = projectEnd(project) / project.ppq / 4;
-    input("timeline-page").max = String(
-      Math.floor((projectEnd(project) - 1) / session.pageSize),
-    );
-    input("timeline-page").value = String(session.pageTick / session.pageSize);
-    const firstBar = session.pageTick / project.ppq / 4 + 1;
-    const lastBar = Math.min(
-      firstBar + session.pageSize / project.ppq / 4 - 1,
-      totalBars,
-    );
-    element("timeline-range").textContent =
-      `${firstBar}–${lastBar} / ${totalBars}`;
-    input("timeline-page").setAttribute(
-      "aria-valuetext",
-      `Bars ${firstBar} to ${lastBar} of ${totalBars}`,
-    );
+    button("timeline-scroll").setAttribute("aria-pressed", String(scrolling));
+    button("seek").textContent = scrolling
+      ? "Play from playhead"
+      : "Play from this page";
+    updateTimeline();
     button("follow").setAttribute(
       "aria-pressed",
       String(session.followPlayback),
@@ -374,6 +367,38 @@ async function start() {
       }, 400);
     }
   }
+  let scrubbing = false;
+  /** Pages: the slider picks a page. Scroll: it is the song position, in beats. */
+  function updateTimeline() {
+    const project = session.store.project;
+    const end = projectEnd(project);
+    const bar = project.ppq * 4;
+    const totalBars = end / bar;
+    const slider = input("timeline-page");
+    if (session.timeline === "scroll") {
+      const tick = Math.min(end - 1, session.audio.positionTick);
+      slider.step = String(project.ppq);
+      slider.max = String(end - 1);
+      if (!scrubbing) slider.value = String(tick);
+      const current = Math.floor(tick / bar) + 1;
+      element("timeline-range").textContent = `${current} / ${totalBars}`;
+      slider.setAttribute("aria-label", "Song position");
+      slider.setAttribute("aria-valuetext", `Bar ${current} of ${totalBars}`);
+      return;
+    }
+    slider.step = "1";
+    slider.max = String(Math.floor((end - 1) / session.pageSize));
+    slider.value = String(session.pageTick / session.pageSize);
+    const firstBar = session.pageTick / bar + 1;
+    const lastBar = Math.min(firstBar + session.pageSize / bar - 1, totalBars);
+    element("timeline-range").textContent =
+      `${firstBar}–${lastBar} / ${totalBars}`;
+    slider.setAttribute("aria-label", "Timeline page");
+    slider.setAttribute(
+      "aria-valuetext",
+      `Bars ${firstBar} to ${lastBar} of ${totalBars}`,
+    );
+  }
   const unsubscribe = session.subscribe(sync);
   sync();
   const handle = (id: string, action: () => void | Promise<void>) => {
@@ -442,8 +467,35 @@ async function start() {
   handle("previous", () => session.page(-1));
   handle("next", () => session.page(1));
   handle("follow", () => session.toggleFollow());
-  input("timeline-page").oninput = () =>
-    session.goToPage(Number(input("timeline-page").value));
+  input("timeline-page").oninput = () => {
+    const value = Number(input("timeline-page").value);
+    if (session.timeline === "scroll") void session.seekTo(value).catch(report);
+    else session.goToPage(value);
+  };
+  // Keep playback from pulling the thumb away while it is held.
+  input("timeline-page").onpointerdown = () => {
+    scrubbing = true;
+  };
+  input("timeline-page").onpointerup = input("timeline-page").onpointercancel =
+    () => {
+      scrubbing = false;
+    };
+  const setTimeline = (mode: TimelineMode) => {
+    session.setTimeline(mode);
+    try {
+      localStorage.setItem("xr-daw.timeline", mode);
+    } catch {}
+  };
+  handle("timeline-scroll", () =>
+    setTimeline(session.timeline === "scroll" ? "pages" : "scroll"),
+  );
+  try {
+    // ?timeline=scroll|pages overrides the remembered choice.
+    const saved =
+      new URLSearchParams(location.search).get("timeline") ??
+      localStorage.getItem("xr-daw.timeline");
+    if (saved === "scroll" || saved === "pages") session.setTimeline(saved);
+  } catch {}
   element<HTMLSelectElement>("timeline-span").onchange = () => {
     const value = element<HTMLSelectElement>("timeline-span").value;
     session.setViewSpan(value === "song" ? "song" : value === "16" ? 16 : 4);
@@ -472,10 +524,7 @@ async function start() {
   handle("camera-out", () => navigation.zoom(1 / 0.85));
   handle("lower", () => session.scrollPitch(-1));
   handle("higher", () => session.scrollPitch(1));
-  handle("seek", async () => {
-    if (session.view === "waveform") await session.clipPlayer.play(0);
-    else await session.audio.play(session.store.project, session.pageTick);
-  });
+  handle("seek", () => session.playFromView());
   handle("shorter", () => session.resize(-1));
   handle("longer", () => session.resize(1));
   handle("undo", () => session.store.undo());
@@ -735,6 +784,8 @@ async function start() {
         );
       }
     }
+    if (session.timeline === "scroll" && session.view !== "waveform")
+      updateTimeline();
     const beats = session.audio.positionTick / session.store.project.ppq;
     element("position").textContent =
       session.view === "waveform"
