@@ -40,6 +40,12 @@ Open the app in a browser with WebXR support and choose **Enter VR**. The timeli
 
 The transport menu provides track selection, note editing, and timeline navigation. Choose **Exit** to return to the desktop view.
 
+## Mouse and touchscreen navigation
+
+Drag empty space to orbit the 3D scene. Right-drag or Shift-drag to pan, and scroll to zoom. On a touchscreen, drag empty space with one finger to orbit; use two fingers to pan and pinch to zoom. **Look** mode lets you rotate even when your gesture starts on a note or waveform. Turn it off to edit or scratch again. Use **Reset view** to return to the starting camera position.
+
+The visible timeline strip offers **4 bars**, **16 bars**, or the entire **Song**. Use its arrows and slider to reach any section; the counter shows the current bars and total length. **Follow** advances the visible section during playback. Navigating manually turns Follow off; enable it again to return to the playhead. Each section fits its notes' pitch range, and the pitch arrows move it by an octave. These controls are also available in the VR transport.
+
 ## Keyboard controls
 
 | Key | Action |

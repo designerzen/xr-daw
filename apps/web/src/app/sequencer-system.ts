@@ -1,4 +1,5 @@
 import {
+  AdditiveBlending,
   AmbientLight,
   BoxGeometry,
   CanvasTexture,
@@ -6,6 +7,7 @@ import {
   createSystem,
   DistanceGrabbable,
   DirectionalLight,
+  DoubleSide,
   Entity,
   Grabbed,
   GridHelper,
@@ -14,13 +16,14 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   MovementMode,
+  PlaneGeometry,
   RayInteractable,
   Sprite,
   SpriteMaterial,
   UIKitMLAsset,
 } from "@iwsdk/core";
 import { NoteView } from "./components";
-import { snapTick, type Note } from "./project";
+import { projectEnd, snapTick, type Note } from "./project";
 import { Session } from "./session";
 import { MAX_NOTE_DEPTH, noteDepth } from "./note-depth";
 
@@ -29,6 +32,8 @@ const WIDTH = 3.2;
 const BOTTOM = 0.95;
 const ROW = 0.035;
 const Z = -2.1;
+const SELECTED = new Color(0x31405c);
+const glowGeometry = new BoxGeometry(1, 1, 1);
 
 function label(text: string, x: number, y: number, width = 0.4) {
   const canvas = document.createElement("canvas");
@@ -62,8 +67,19 @@ export function sequencerSystem(session: Session) {
     private viewPivot = new Group();
     private content = new Group();
     private contentEntity!: Entity;
+    // A sheet through the whole velocity depth, so it reads from any camera angle.
     private playhead = new Mesh(
-      new BoxGeometry(0.008, ROW * 36, 0.008),
+      new PlaneGeometry(MAX_NOTE_DEPTH + 0.1, ROW * 36),
+      new MeshBasicMaterial({
+        color: 0x9fd0ff,
+        transparent: true,
+        opacity: 0.22,
+        side: DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    private playheadEdge = new Mesh(
+      new BoxGeometry(0.006, ROW * 36, 0.006),
       new MeshBasicMaterial({ color: 0xffffff }),
     );
 
@@ -85,7 +101,15 @@ export function sequencerSystem(session: Session) {
       const floor = new GridHelper(20, 40, 0x27374f, 0x1b2638);
       floor.position.y = -0.02;
       this.scene.add(floor);
-      this.playhead.position.set(LEFT, BOTTOM + ROW * 18, Z + 0.07);
+      this.playhead.position.set(
+        LEFT,
+        BOTTOM + ROW * 18,
+        Z + (MAX_NOTE_DEPTH + 0.1) / 2,
+      );
+      this.playhead.rotation.y = Math.PI / 2;
+      // The plane is turned side-on, so its local x axis runs along scene depth.
+      this.playheadEdge.position.x = -(MAX_NOTE_DEPTH + 0.1) / 2;
+      this.playhead.add(this.playheadEdge);
       this.content.add(this.playhead);
       this.cleanupFuncs.push(
         session.subscribe(() => {
@@ -142,6 +166,11 @@ export function sequencerSystem(session: Session) {
         },
         previous: () => session.page(-1),
         next: () => session.page(1),
+        follow: () => session.toggleFollow(),
+        span: () =>
+          session.setViewSpan(
+            session.viewSpan === 4 ? 16 : session.viewSpan === 16 ? "song" : 4,
+          ),
         shorter: () => session.resize(-1),
         longer: () => session.resize(1),
         undo: () => {
@@ -187,6 +216,8 @@ export function sequencerSystem(session: Session) {
         floor.material.dispose();
         this.playhead.geometry.dispose();
         this.playhead.material.dispose();
+        this.playheadEdge.geometry.dispose();
+        this.playheadEdge.material.dispose();
       });
     }
 
@@ -228,18 +259,23 @@ export function sequencerSystem(session: Session) {
       const velocityLabel = label("Velocity", LEFT - 0.06, BOTTOM - 0.13, 0.25);
       velocityLabel.position.z = Z + MAX_NOTE_DEPTH / 2;
       add(velocityLabel);
-      for (let beat = 0; beat <= 16; beat++) {
+      const bars = session.pageSize / session.store.project.ppq / 4;
+      const minorStep = Math.max(1, Math.ceil(bars / 16));
+      const majorStep = Math.max(4, Math.ceil(bars / 4) * 4);
+      for (let beat = 0; beat <= bars * 4; beat += minorStep) {
         const line = new Mesh(
           new BoxGeometry(0.002, ROW * 36, 0.002),
-          new MeshBasicMaterial({ color: beat % 4 ? 0x28364b : 0x546581 }),
+          new MeshBasicMaterial({
+            color: beat % majorStep ? 0x28364b : 0x546581,
+          }),
         );
         line.position.set(
-          LEFT + (beat * WIDTH) / 16,
+          LEFT + (beat * WIDTH) / (bars * 4),
           BOTTOM + ROW * 18,
           Z - 0.015,
         );
         add(line);
-        if (beat % 4 === 0)
+        if (beat % majorStep === 0)
           add(
             label(
               `Bar ${Math.floor(session.pageTick / session.store.project.ppq / 4) + beat / 4 + 1}`,
@@ -314,6 +350,24 @@ export function sequencerSystem(session: Session) {
         mesh.userData.noteId = note.id;
         mesh.userData.anchorX = mesh.position.x;
         mesh.userData.anchorY = mesh.position.y;
+        mesh.userData.start = note.start;
+        mesh.userData.end = note.start + note.duration;
+        mesh.userData.glow = 0;
+        mesh.userData.flash = 0;
+        const halo = new Mesh(
+          glowGeometry,
+          new MeshBasicMaterial({
+            color: material.color,
+            transparent: true,
+            opacity: 0,
+            blending: AdditiveBlending,
+            depthWrite: false,
+          }),
+        );
+        halo.scale.set(width + 0.02, ROW * 1.5, depth + 0.02);
+        halo.visible = false;
+        halo.raycast = () => {};
+        mesh.add(halo);
         const entity = this.world.createTransformEntity(
           mesh,
           this.contentEntity,
@@ -340,10 +394,10 @@ export function sequencerSystem(session: Session) {
         this.noteEntities.push(entity);
       }
       this.revision = session.store.revision;
-      this.viewKey = `${session.pageTick}:${session.basePitch}:${session.trackId}:${ppq}`;
+      this.viewKey = `${session.pageTick}:${session.basePitch}:${session.trackId}:${ppq}:${session.pageSize}`;
     }
 
-    update() {
+    update(delta: number) {
       for (const entity of this.noteEntities) {
         const object = entity.object3D!;
         const previous = this.dragging.get(entity);
@@ -386,16 +440,25 @@ export function sequencerSystem(session: Session) {
         this.viewPivot.rotation.x =
           session.view === "velocity" ? -Math.PI / 2 : 0;
         const panel = this.world.requireSceneObject<UIKitMLAsset>("transport");
-        panel
-          .requireElementById("vinyl-options")
-          .setProperties({
-            display: session.view === "waveform" ? "flex" : "none",
-          });
-        panel
-          .requireElementById("vinyl")
-          .setProperties({
-            backgroundOpacity: session.clipPlayer.vinylEnabled ? 0.25 : 0.04,
-          });
+        panel.requireElementById("follow").setProperties({
+          backgroundOpacity: session.followPlayback ? 0.25 : 0.04,
+        });
+        const firstBar = session.pageTick / session.store.project.ppq / 4 + 1;
+        const totalBars =
+          projectEnd(session.store.project) / session.store.project.ppq / 4;
+        panel.requireElementById("timeline-label").setProperties({
+          text: `Bars ${firstBar}-${Math.min(firstBar + session.pageSize / session.store.project.ppq / 4 - 1, totalBars)} / ${totalBars}`,
+        });
+        panel.requireElementById("span-label").setProperties({
+          text:
+            session.viewSpan === "song" ? "Song" : `${session.viewSpan} bars`,
+        });
+        panel.requireElementById("vinyl-options").setProperties({
+          display: session.view === "waveform" ? "flex" : "none",
+        });
+        panel.requireElementById("vinyl").setProperties({
+          backgroundOpacity: session.clipPlayer.vinylEnabled ? 0.25 : 0.04,
+        });
         panel
           .requireElementById("condition-label")
           .setProperties({ text: session.clipPlayer.vinylCondition });
@@ -406,25 +469,41 @@ export function sequencerSystem(session: Session) {
           panel.requireElementById(`view-${view}`).setProperties({
             backgroundOpacity: session.view === view ? 0.25 : 0.04,
           });
-        const key = `${session.pageTick}:${session.basePitch}:${session.trackId}:${session.store.project.ppq}`;
+        const key = `${session.pageTick}:${session.basePitch}:${session.trackId}:${session.store.project.ppq}:${session.pageSize}`;
         if (this.revision !== session.store.revision || key !== this.viewKey)
           this.rebuild();
-        for (const entity of this.noteEntities) {
-          const mesh = entity.object3D as Mesh<
-            BoxGeometry,
-            MeshStandardMaterial
-          >;
-          mesh.material.emissive.setHex(
-            mesh.userData.noteId === session.store.selectedId ? 0x31405c : 0,
-          );
-        }
         this.dirty = false;
       }
       const tick = session.audio.positionTick;
+      if (!this.dragging.size) session.followPlayhead();
       this.playhead.visible =
         tick >= session.pageTick && tick <= session.pageTick + session.pageSize;
       this.playhead.position.x =
         LEFT + ((tick - session.pageTick) / session.pageSize) * WIDTH;
+      // Sounding notes flash on their attack, glow while held, then fade out.
+      for (const entity of this.noteEntities) {
+        const mesh = entity.object3D as Mesh<BoxGeometry, MeshStandardMaterial>;
+        const data = mesh.userData;
+        const sounding =
+          session.audio.playing && tick >= data.start && tick < data.end;
+        if (sounding && !data.sounding) data.flash = 1;
+        data.sounding = sounding;
+        data.glow +=
+          ((sounding ? 1 : 0) - data.glow) *
+          Math.min(1, delta * (sounding ? 30 : 6));
+        data.flash *= Math.exp(-delta * 7);
+        const level = data.glow * 0.6 + data.flash * 0.8;
+        mesh.material.emissive.copy(mesh.material.color).multiplyScalar(level);
+        if (data.noteId === session.store.selectedId)
+          mesh.material.emissive.add(SELECTED);
+        const halo = mesh.children[0] as Mesh<BoxGeometry, MeshBasicMaterial>;
+        halo.visible = level > 0.01;
+        halo.material.opacity = data.glow * 0.2 + data.flash * 0.5;
+        if (!this.dragging.has(entity)) {
+          const pulse = 1 + data.glow * 0.08 + data.flash * 0.3;
+          mesh.scale.set(1, pulse, pulse);
+        }
+      }
     }
   };
 }

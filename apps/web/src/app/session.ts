@@ -7,6 +7,8 @@ export class Session {
   readonly audio = new AudioEngine();
   readonly clipPlayer = new ClipPlayer();
   pageTick = 0;
+  followPlayback = true;
+  viewSpan: 4 | 16 | "song" = 4;
   basePitch = 48;
   trackId: string;
   view: "notes" | "velocity" | "waveform" = "notes";
@@ -61,7 +63,15 @@ export class Session {
     this.emit();
   }
   get pageSize() {
-    return this.store.project.ppq * 16;
+    return this.viewSpan === "song"
+      ? projectEnd(this.store.project)
+      : this.store.project.ppq * this.viewSpan * 4;
+  }
+  setViewSpan(span: 4 | 16 | "song") {
+    this.viewSpan = span;
+    this.pageTick = Math.floor(this.pageTick / this.pageSize) * this.pageSize;
+    this.fitPitch();
+    this.emit();
   }
   get track() {
     return this.store.project.tracks.find((t) => t.id === this.trackId);
@@ -77,8 +87,15 @@ export class Session {
     );
   }
   fitPitch() {
-    const pitches = this.store.project.notes
-      .filter((n) => n.trackId === this.trackId)
+    const trackNotes = this.store.project.notes.filter(
+      (n) => n.trackId === this.trackId,
+    );
+    const pageNotes = trackNotes.filter(
+      (n) =>
+        n.start < this.pageTick + this.pageSize &&
+        n.start + n.duration > this.pageTick,
+    );
+    const pitches = (pageNotes.length ? pageNotes : trackNotes)
       .map((n) => n.pitch)
       .sort((a, b) => a - b);
     this.basePitch = Math.max(
@@ -91,6 +108,7 @@ export class Session {
     this.clipPlayer.stop();
     this.view = "notes";
     this.pageTick = 0;
+    this.followPlayback = true;
     this.trackId = project.tracks[0]?.id ?? "";
     this.store.replace(project);
     this.fitPitch();
@@ -103,14 +121,38 @@ export class Session {
     this.emit();
   }
   page(direction: number) {
+    this.goToPage(this.pageTick / this.pageSize + direction);
+  }
+  goToPage(index: number) {
     if (this.view === "waveform") return;
+    if (!Number.isFinite(index)) return;
     const finalPage =
       Math.floor((projectEnd(this.store.project) - 1) / this.pageSize) *
       this.pageSize;
     this.pageTick = Math.max(
       0,
-      Math.min(finalPage, this.pageTick + direction * this.pageSize),
+      Math.min(finalPage, Math.round(index) * this.pageSize),
     );
+    this.followPlayback = false;
+    this.fitPitch();
+    this.emit();
+  }
+  toggleFollow() {
+    this.followPlayback = !this.followPlayback;
+    this.followPlayhead();
+    this.emit();
+  }
+  followPlayhead() {
+    if (!this.followPlayback || !this.audio.playing || this.view === "waveform")
+      return;
+    const tick = Math.min(
+      projectEnd(this.store.project) - 1,
+      this.audio.positionTick,
+    );
+    const page = Math.floor(tick / this.pageSize) * this.pageSize;
+    if (page === this.pageTick) return;
+    this.pageTick = page;
+    this.fitPitch();
     this.emit();
   }
   scrollPitch(direction: number) {
@@ -123,12 +165,17 @@ export class Session {
       if (this.clipPlayer.playing) this.clipPlayer.pause();
       else await this.clipPlayer.play();
     } else if (this.audio.playing) this.audio.pause();
-    else await this.audio.play(this.store.project);
+    else {
+      this.followPlayback = true;
+      await this.audio.play(this.store.project);
+      this.followPlayhead();
+    }
     this.emit();
   }
   stop() {
     this.audio.stop();
     this.clipPlayer.stop();
+    this.followPlayback = true;
     this.emit();
   }
   resize(direction: number) {

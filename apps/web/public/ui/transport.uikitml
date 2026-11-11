@@ -8,6 +8,9 @@
     <Button id="view-notes"><ButtonLabel>Notes</ButtonLabel></Button>
     <Button id="view-velocity"><ButtonLabel>Velocity</ButtonLabel></Button>
     <Button id="view-waveform" style="display: none"><ButtonLabel>Waveform</ButtonLabel></Button>
+    <Button id="follow"><ButtonLabel>Follow</ButtonLabel></Button>
+    <Button id="span"><ButtonLabel id="span-label">4 bars</ButtonLabel></Button>
+    <ButtonLabel id="timeline-label">Bars 1-4</ButtonLabel>
   </div>
   <div class="row">
     <Button id="play"><ButtonLabel>Play</ButtonLabel></Button>

@@ -210,6 +210,37 @@ export default async function run({ frame, page, workspaceRoot }) {
     const entries = window.__mediaSources;
     return entries.at(-1).source.buffer === entries[0].source.buffer;
   });
+  const beforeTouch = await frame.evaluate(() => window.__mediaSources.length);
+  const cdp = await page.context().newCDPSession(page);
+  const touchPoint = await point(0.65);
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [
+      { id: 1, x: bounds.x + touchPoint.x, y: bounds.y + touchPoint.y },
+    ],
+  });
+  for (const fraction of [0.6, 0.5, 0.4, 0.3]) {
+    const p = await point(fraction);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ id: 1, x: bounds.x + p.x, y: bounds.y + p.y }],
+    });
+  }
+  await frame.waitForFunction(
+    (before) =>
+      window.__mediaSources
+        .slice(before)
+        .some(
+          (entry) =>
+            entry.source.buffer !== window.__mediaSources[0].source.buffer,
+        ),
+    beforeTouch,
+  );
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+  await cdp.detach();
   await frame.locator("#stop").click();
   await frame.waitForFunction(() =>
     document.querySelector("#position").textContent.startsWith("0.00s"),

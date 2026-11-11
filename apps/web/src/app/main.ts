@@ -8,6 +8,7 @@ import { Session } from "./session";
 import { sequencerSystem } from "./sequencer-system";
 import { waveformSystem } from "./waveform-system";
 import type { VinylCondition } from "./vinyl-playback";
+import { SceneNavigation } from "./scene-navigation";
 import "./style.css";
 
 function download(blob: Blob, name: string) {
@@ -30,6 +31,9 @@ const icons: Record<string, string> = {
   longer: "M5 12h14M12 5v14",
   audition: "M4 10h4l5-4v12l-5-4H4zM17 9q4 3 0 6",
   delete: "M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13",
+  previous: "M15 5l-7 7 7 7",
+  next: "M9 5l7 7-7 7",
+  reset: "M4 11a8 8 0 1 1 2 7M4 4v7h7",
 };
 const icon = (name: string) =>
   `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${icons[name]}"/></svg>`;
@@ -55,6 +59,21 @@ root.innerHTML = `
     <button id="view-velocity" type="button" aria-pressed="false">Velocity</button>
     <button id="view-waveform" type="button" aria-pressed="false" hidden>Waveform</button>
   </nav>
+  <nav class="scene-tools" aria-label="Scene navigation">
+    <button id="camera-look" aria-pressed="false" title="Look mode: drag anywhere to rotate the scene">Look</button>
+    ${iconButton("camera-reset", "Reset view", "reset")}
+    ${iconButton("camera-in", "Zoom in", "longer")}${iconButton("camera-out", "Zoom out", "shorter")}
+    <span class="pitch-tools">${iconButton("higher", "Higher pitches", "next")}${iconButton("lower", "Lower pitches", "previous")}</span>
+    <details class="menu navigation-help"><summary aria-label="Navigation help">?</summary><div class="menu-panel">Drag background to orbit.<br />Right-drag or Shift-drag to pan.<br />Scroll to zoom.<br />Touch: two fingers to pan and pinch.<br />Look mode lets you rotate over notes.</div></details>
+  </nav>
+  <nav id="timeline-navigation" class="timeline-navigation" aria-label="Timeline">
+    <select id="timeline-span" aria-label="Visible timeline" title="Visible timeline"><option value="4">4 bars</option><option value="16">16 bars</option><option value="song">Song</option></select>
+    ${iconButton("previous", "Previous four bars", "previous")}
+    <input id="timeline-page" type="range" min="0" max="0" step="1" value="0" aria-label="Timeline page" />
+    ${iconButton("next", "Next four bars", "next")}
+    <output id="timeline-range" aria-live="polite"></output>
+    <button id="follow" aria-pressed="true" title="Follow playback through the song">Follow</button>
+  </nav>
   <section class="transport" aria-label="Transport">
     ${iconButton("play", "Play", "play", "primary")}${iconButton("stop", "Stop", "stop")}
     <span class="divider"></span>
@@ -67,8 +86,6 @@ root.innerHTML = `
         <div class="menu-row"><label><input id="loop" type="checkbox" /> Loop</label><label><input id="mute" type="checkbox" /> Mute</label></div>
         <label>Gain <input id="gain" type="range" min="0" max="1" step="0.01" /></label><hr />
         <label id="vinyl-condition-control" hidden>Condition <select id="vinyl-condition" aria-label="Vinyl condition"><option value="clean">Clean</option><option value="worn">Worn</option><option value="damaged">Damaged</option></select></label>
-        <div class="menu-row"><button id="previous">← Bars</button><button id="next">Bars →</button></div>
-        <div class="menu-row"><button id="lower">Octave −</button><button id="higher">Octave +</button></div>
         <button id="seek">Play from this page</button><hr />
         <div class="menu-row"><button id="undo">Undo</button><button id="redo">Redo</button></div>
         <button id="add">Add note</button>
@@ -107,9 +124,13 @@ const closeMenus = () =>
   menus.forEach((menu) => {
     menu.open = false;
   });
-document.addEventListener("pointerdown", (event) => {
-  if (!(event.target as HTMLElement).closest("details")) closeMenus();
-});
+document.addEventListener(
+  "pointerdown",
+  (event) => {
+    if (!(event.target as HTMLElement).closest("details")) closeMenus();
+  },
+  true,
+);
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeMenus();
 });
@@ -153,6 +174,11 @@ async function start() {
   };
   window.addEventListener("resize", resizeViewport);
   resizeViewport();
+  const navigation = new SceneNavigation(
+    world.camera,
+    world.renderer.domElement,
+    world.scene,
+  );
   world.registerSystem(sequencerSystem(session));
   world.registerSystem(waveformSystem(session));
   let lastRevision = session.store.revision;
@@ -178,6 +204,34 @@ async function start() {
         String(session.view === view),
       );
     const project = session.store.project;
+    element("timeline-navigation").hidden = waveform;
+    element<HTMLSelectElement>("timeline-span").value = String(
+      session.viewSpan,
+    );
+    element("timeline-navigation").classList.toggle(
+      "single-page",
+      projectEnd(project) <= session.pageSize,
+    );
+    const totalBars = projectEnd(project) / project.ppq / 4;
+    input("timeline-page").max = String(
+      Math.floor((projectEnd(project) - 1) / session.pageSize),
+    );
+    input("timeline-page").value = String(session.pageTick / session.pageSize);
+    const firstBar = session.pageTick / project.ppq / 4 + 1;
+    const lastBar = Math.min(
+      firstBar + session.pageSize / project.ppq / 4 - 1,
+      totalBars,
+    );
+    element("timeline-range").textContent =
+      `${firstBar}–${lastBar} / ${totalBars}`;
+    input("timeline-page").setAttribute(
+      "aria-valuetext",
+      `Bars ${firstBar} to ${lastBar} of ${totalBars}`,
+    );
+    button("follow").setAttribute(
+      "aria-pressed",
+      String(session.followPlayback),
+    );
     const nextTrackKey = JSON.stringify(
       project.tracks.map((t) => [t.id, t.name]),
     );
@@ -275,12 +329,14 @@ async function start() {
     else {
       world.renderer.setSize(window.innerWidth, window.innerHeight);
       requestingXR = true;
+      navigation.setImmersive(true);
       void session.audio.unlock().catch(report);
       world.launchXR();
     }
   };
   const visibilityCleanup = world.visibilityState.subscribe((value) => {
     const immersive = value !== VisibilityState.NonImmersive;
+    navigation.setImmersive(immersive);
     root.classList.toggle("immersive", immersive);
     button("enter-vr").textContent = immersive ? "Exit VR" : "Enter VR";
     if (!immersive) {
@@ -299,6 +355,23 @@ async function start() {
   handle("view-waveform", () => session.setView("waveform"));
   handle("previous", () => session.page(-1));
   handle("next", () => session.page(1));
+  handle("follow", () => session.toggleFollow());
+  input("timeline-page").oninput = () =>
+    session.goToPage(Number(input("timeline-page").value));
+  element<HTMLSelectElement>("timeline-span").onchange = () => {
+    const value = element<HTMLSelectElement>("timeline-span").value;
+    session.setViewSpan(value === "song" ? "song" : value === "16" ? 16 : 4);
+  };
+  handle("camera-look", () => {
+    navigation.look = !navigation.look;
+    button("camera-look").setAttribute("aria-pressed", String(navigation.look));
+    world.renderer.domElement.style.cursor = navigation.look
+      ? "grab"
+      : "default";
+  });
+  handle("camera-reset", () => navigation.reset());
+  handle("camera-in", () => navigation.zoom(0.85));
+  handle("camera-out", () => navigation.zoom(1 / 0.85));
   handle("lower", () => session.scrollPitch(-1));
   handle("higher", () => session.scrollPitch(1));
   handle("seek", async () => {
@@ -309,7 +382,10 @@ async function start() {
   handle("longer", () => session.resize(1));
   handle("undo", () => session.store.undo());
   handle("redo", () => session.store.redo());
-  handle("add", () => session.addNote());
+  handle("add", () => {
+    session.addNote();
+    closeMenus();
+  });
   handle("delete", () => session.deleteNote());
   handle("audition", async () => {
     if (session.store.selected)
@@ -552,6 +628,7 @@ async function start() {
     if (requestingXR && !world.sessionRequestPending) {
       requestingXR = false;
       if (!world.session) {
+        navigation.setImmersive(false);
         resizeViewport();
         report(
           new Error(
@@ -579,6 +656,7 @@ async function start() {
     clearInterval(interval);
     unsubscribe();
     visibilityCleanup();
+    navigation.dispose();
     window.removeEventListener("keydown", keyboard);
     window.removeEventListener("resize", resizeViewport);
     window.removeEventListener("dragenter", dragEnter);

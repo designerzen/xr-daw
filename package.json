@@ -19,6 +19,7 @@
     "dev:down": "npm run dev:down --workspace @xr-daw/web",
     "dev:status": "npm run dev:status --workspace @xr-daw/web",
     "test:browser": "npm run test:browser --workspace @xr-daw/web",
+    "test:navigation": "npm run test:navigation --workspace @xr-daw/web",
     "test:media": "npm run test:media --workspace @xr-daw/web",
     "test:vinyl": "npm run test:vinyl --workspace @xr-daw/web",
     "test:xr": "npm run test:xr --workspace @xr-daw/web"

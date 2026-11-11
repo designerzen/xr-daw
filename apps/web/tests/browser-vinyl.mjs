@@ -56,6 +56,8 @@ export default async function run({ frame, page }) {
     { timeout: 60000 },
   );
   await frame.locator("#vinyl-enabled").check();
+  assert.equal(await frame.locator("#track").isVisible(), false);
+  assert.equal(await frame.locator("#tempo").isVisible(), false);
   await frame.waitForFunction(
     () => !document.querySelector("#vinyl-enabled").disabled,
     null,

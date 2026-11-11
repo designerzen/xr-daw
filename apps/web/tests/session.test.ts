@@ -3,6 +3,47 @@ import { test } from "node:test";
 import { Session } from "../src/app/session";
 import { demoProject } from "../src/app/project";
 
+test("the full song is reachable and manual navigation suspends playback following", () => {
+  const project = demoProject();
+  project.notes[0].start = 480 * 80;
+  const session = new Session(project);
+  session.goToPage(5);
+  assert.equal(session.pageTick, 480 * 80);
+  assert.equal(session.followPlayback, false);
+  session.goToPage(999);
+  assert.equal(session.pageTick, 480 * 80);
+  session.goToPage(-1);
+  assert.equal(session.pageTick, 0);
+  session.audio.playing = true;
+  Object.defineProperty(session.audio, "positionTick", { get: () => 480 * 36 });
+  session.followPlayhead();
+  assert.equal(session.pageTick, 0);
+  session.toggleFollow();
+  assert.equal(session.pageTick, 480 * 32);
+  assert.equal(session.followPlayback, true);
+  session.setViewSpan("song");
+  assert.equal(session.pageTick, 0);
+  assert.equal(session.pageSize, 480 * 84);
+  session.dispose();
+});
+
+test("playback following is the default and returns whenever playback starts or stops", async () => {
+  const session = new Session(demoProject());
+  assert.equal(session.followPlayback, true);
+  session.audio.play = async () => {
+    session.audio.playing = true;
+  };
+  session.page(1);
+  assert.equal(session.followPlayback, false);
+  await session.togglePlay();
+  assert.equal(session.followPlayback, true);
+  session.page(1);
+  assert.equal(session.followPlayback, false);
+  session.stop();
+  assert.equal(session.followPlayback, true);
+  session.dispose();
+});
+
 test("view navigation preserves the project, selection, timeline and undo history", () => {
   const session = new Session(demoProject());
   const project = session.store.project;

@@ -22,6 +22,7 @@ In another terminal, from the repository root:
 
 ```sh
 npm run test:browser
+npm run test:navigation
 npm run test:media
 npm run test:vinyl
 npm run test:xr
@@ -30,6 +31,8 @@ npm run dev:down
 ```
 
 The desktop smoke test checks note dragging, editing, playback, project downloads, autosave, MIDI import, and WAV export. Artifacts are written to `apps/web/artifacts` and are ignored by Git.
+
+The navigation test reaches the final section of a 24-bar fixture, follows playback across a page boundary, and exercises mouse orbit/pan/zoom and native touchscreen orbit/pan/pinch through Chromium's touch input.
 
 The media test generates stereo WAV audio with known frequencies, drops MIDI and WAV files, checks circle instances and FFT colors, seeks through real pointer events, and verifies that backward scratching plays reversed PCM. It also checks file chooser loading and failed-import recovery.
 
