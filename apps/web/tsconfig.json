@@ -3,8 +3,9 @@
     "target": "ES2022", "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "module": "ESNext", "moduleResolution": "Bundler", "strict": true,
     "skipLibCheck": true, "noEmit": true, "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "types": ["node", "vite/client", "@iwsdk/vite-plugin-dev/client"]
   },
-  "include": ["src/app/**/*.ts", "tests/**/*.ts", "vite.config.mts"]
+  "include": ["src/app/**/*.ts", "tests/**/*.ts", "vite.config.mts", "../../packages/audiobus/types/openmpt.d.ts"]
 }

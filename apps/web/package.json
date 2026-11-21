@@ -19,17 +19,21 @@
     "test:scroll": "iwsdk browser run tests/browser-scroll.mjs --timeout 110000",
     "test:editing": "iwsdk browser run tests/browser-editing.mjs --timeout 110000",
     "test:media": "iwsdk browser run tests/browser-media.mjs --timeout 110000",
+    "test:formats": "iwsdk browser run tests/browser-formats.mjs --timeout 110000",
     "test:vinyl": "iwsdk browser run tests/browser-vinyl.mjs --timeout 110000",
     "test:xr": "iwsdk browser run tests/xr-enter.mjs",
     "test:ar": "iwsdk browser run tests/xr-ar.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "1.0.1",
+    "@pmndrs/pointer-events": "6.6.32",
     "@pmndrs/uikit": "1.0.74",
     "@pmndrs/uikit-horizon": "1.0.74",
     "@pmndrs/uikit-lucide": "1.0.74",
     "three": "npm:super-three@0.181.0",
     "midi-file": "1.2.4",
+    "audiobus": "workspace:*",
+    "netronome": "workspace:*",
     "webmidi": "^3.1.12"
   },
   "devDependencies": {

@@ -1,3 +1,5 @@
+import { Timer, TIMER_TYPE_AUDIO_WORKLET } from "netronome";
+import { ProjectInstrument } from "./instrument";
 import {
   projectEnd,
   secondsToTick,
@@ -21,40 +23,11 @@ export function compileNotes(project: Project): TimedNote[] {
     .sort((a, b) => a.start - b.start);
 }
 
-/** Native audio nodes run on the audio thread. UI/render frames never trigger sequencer notes. */
-function voice(
-  context: BaseAudioContext,
-  destination: AudioNode,
-  pitch: number,
-  velocity: number,
-  gain: number,
-  at: number,
-  duration: number,
-): OscillatorNode {
-  const oscillator = context.createOscillator();
-  const envelope = context.createGain();
-  oscillator.type = "triangle";
-  oscillator.frequency.value = 440 * Math.pow(2, (pitch - 69) / 12);
-  const end = at + Math.max(0.01, duration);
-  const level = Math.max(0.0001, velocity * gain * 0.12);
-  envelope.gain.setValueAtTime(0, at);
-  envelope.gain.linearRampToValueAtTime(level, Math.min(at + 0.005, end));
-  envelope.gain.setValueAtTime(level, end);
-  envelope.gain.exponentialRampToValueAtTime(0.0001, end + 0.04);
-  oscillator.connect(envelope).connect(destination);
-  oscillator.start(at);
-  oscillator.stop(end + 0.05);
-  oscillator.onended = () => {
-    oscillator.disconnect();
-    envelope.disconnect();
-  };
-  return oscillator;
-}
-
 export class AudioEngine {
   private context?: AudioContext;
   private master?: GainNode;
-  private voices = new Set<OscillatorNode>();
+  private instrument?: ProjectInstrument;
+  private clock?: Timer;
   private worker?: Worker;
   private workerUrl?: string;
   private generation = 0;
@@ -77,6 +50,7 @@ export class AudioEngine {
       limiter.threshold.value = -6;
       limiter.ratio.value = 12;
       this.master.connect(limiter).connect(this.context.destination);
+      this.instrument = new ProjectInstrument(this.context, this.master);
       this.context.onstatechange = () => {
         if (this.context?.state === "suspended" && this.playing) this.pause();
       };
@@ -99,7 +73,15 @@ export class AudioEngine {
     const request = ++this.generation;
     await this.unlock();
     if (request !== this.generation) return;
+    this.playing = false;
     this.stopVoices();
+    try {
+      await this.instrument!.prepare(project);
+    } catch (error) {
+      if (request !== this.generation) return;
+      throw error;
+    }
+    if (request !== this.generation) return;
     this.project = project;
     this.notes = compileNotes(project);
     this.duration = tickToSeconds(project, projectEnd(project));
@@ -110,17 +92,49 @@ export class AudioEngine {
     this.cursor = 0;
     this.scheduledCycle = 0;
     this.playing = true;
-    if (!this.worker) {
-      // A worker wakes the lookahead scheduler even when the visual frame rate falls.
-      this.workerUrl = URL.createObjectURL(
-        new Blob(["setInterval(() => postMessage(0), 25)"], {
-          type: "text/javascript",
-        }),
-      );
-      this.worker = new Worker(this.workerUrl);
-      this.worker.onmessage = () => this.schedule();
-    }
     this.schedule();
+    await this.startClock(project, tick ?? 0);
+  }
+
+  /**
+   * Netronome's AudioWorklet clock wakes the lookahead scheduler from the audio thread, so
+   * notes keep flowing when the visual frame rate falls. It pulses at 24 per beat (MIDI clock)
+   * at the tempo where playback starts.
+   */
+  private async startClock(project: Project, tick: number) {
+    const tempo =
+      [...project.tempos].reverse().find((t) => t.tick <= tick) ??
+      project.tempos[0];
+    // Never pulse slower than the scheduler's 150 ms lookahead can cover.
+    const bpm = Math.max(60, tempo?.bpm ?? 120);
+    try {
+      this.clock ??= new Timer({
+        audioContext: this.context,
+        type: TIMER_TYPE_AUDIO_WORKLET,
+        divisions: 24,
+        bpm,
+        synch: false,
+      });
+      await this.clock.loaded;
+      if (!this.playing) return;
+      this.clock.bpm = bpm;
+      await this.clock.startTimer(() => this.schedule());
+    } catch (error) {
+      console.warn("Netronome clock unavailable, using a worker timer", error);
+      this.clock = undefined;
+      this.startFallbackClock();
+    }
+  }
+
+  private startFallbackClock() {
+    if (this.worker) return;
+    this.workerUrl = URL.createObjectURL(
+      new Blob(["setInterval(() => postMessage(0), 25)"], {
+        type: "text/javascript",
+      }),
+    );
+    this.worker = new Worker(this.workerUrl);
+    this.worker.onmessage = () => this.schedule();
   }
 
   private schedule() {
@@ -168,17 +182,7 @@ export class AudioEngine {
       );
       const duration = this.origin + eventEnd - start;
       if (duration <= 0) continue;
-      const node = voice(
-        this.context,
-        this.master,
-        event.note.pitch,
-        event.note.velocity,
-        track.gain,
-        start,
-        duration,
-      );
-      this.voices.add(node);
-      node.addEventListener("ended", () => this.voices.delete(node));
+      this.instrument!.schedule(event.note, start, duration);
     }
   }
 
@@ -187,6 +191,7 @@ export class AudioEngine {
     this.playing = false;
     this.generation++;
     this.stopVoices();
+    this.clock?.stopTimer().catch(() => {});
   }
   stop() {
     this.pause();
@@ -200,47 +205,34 @@ export class AudioEngine {
     if (wasPlaying) await this.play(project, tick);
   }
   async audition(note: Note, gain = 0.7) {
+    const request = this.generation;
     await this.unlock();
-    const node = voice(
-      this.context!,
-      this.master!,
-      note.pitch,
-      note.velocity,
-      gain,
-      this.context!.currentTime,
-      0.22,
-    );
-    this.voices.add(node);
-    node.addEventListener("ended", () => this.voices.delete(node));
+    if (request !== this.generation) return;
+    await this.instrument!.audition(note, gain);
   }
   private stopVoices() {
-    for (const node of this.voices) {
-      try {
-        node.stop();
-      } catch {
-        /* Already ended. */
-      }
-    }
-    this.voices.clear();
+    this.instrument?.silence();
   }
   dispose() {
     this.stop();
+    this.clock?.unsetTimingWorker().catch(() => {});
     this.worker?.terminate();
     if (this.workerUrl) URL.revokeObjectURL(this.workerUrl);
+    this.instrument?.dispose();
     void this.context?.close();
   }
 }
 
 export async function exportWav(project: Project): Promise<Blob> {
   const sampleRate = 44100;
-  const seconds = tickToSeconds(project, projectEnd(project)) + 0.1;
-  if (seconds > 600)
+  const duration = tickToSeconds(project, projectEnd(project));
+  if (duration > 600)
     throw new Error(
       "WAV export currently supports projects up to ten minutes.",
     );
   const context = new OfflineAudioContext(
     2,
-    Math.ceil(seconds * sampleRate),
+    Math.ceil((duration + 2) * sampleRate),
     sampleRate,
   );
   const master = context.createGain();
@@ -249,20 +241,14 @@ export async function exportWav(project: Project): Promise<Blob> {
   limiter.threshold.value = -6;
   limiter.ratio.value = 12;
   master.connect(limiter).connect(context.destination);
-  for (const { note, start, end } of compileNotes(project)) {
-    const track = project.tracks.find((t) => t.id === note.trackId);
-    if (track && !track.muted)
-      voice(
-        context,
-        master,
-        note.pitch,
-        note.velocity,
-        track.gain,
-        start,
-        end - start,
-      );
+  const instrument = new ProjectInstrument(context, master);
+  try {
+    await instrument.prepare(project);
+    instrument.scheduleProject(project);
+    return encodeWav(await context.startRendering());
+  } finally {
+    instrument.dispose();
   }
-  return encodeWav(await context.startRendering());
 }
 
 export function encodeWav(buffer: AudioBuffer): Blob {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AudioEngine } from "../src/app/audio";
 import { demoProject } from "../src/app/project";
+import { ProjectInstrument } from "../src/app/instrument";
 
 class Parameter {
   value = 0;
@@ -30,20 +31,63 @@ class Node {
     this.stopped = at;
   }
 }
+class AudioWorkletNode extends Node {
+  static instances: AudioWorkletNode[] = [];
+  closed = false;
+  messages: {
+    type: string;
+    time?: number;
+    note?: number;
+    part?: number;
+    velocity?: number;
+  }[] = [];
+  port = {
+    postMessage: (message: AudioWorkletNode["messages"][number]) =>
+      this.messages.push(message),
+    close: () => {
+      this.closed = true;
+    },
+  };
+  constructor(_context: unknown, name: string) {
+    super();
+    // Exercise the worker-clock fallback independently of the FM instrument worklet.
+    if (name !== "harmoneasy-fm")
+      throw new Error("Clock worklet unavailable in test");
+    AudioWorkletNode.instances.push(this);
+  }
+}
+function notes() {
+  return AudioWorkletNode.instances.flatMap((node) =>
+    node.messages.filter((m) => m.type === "on"),
+  );
+}
+const previousWorklet = globalThis.AudioWorkletNode;
+test.beforeEach(() => {
+  AudioWorkletNode.instances = [];
+  globalThis.AudioWorkletNode =
+    AudioWorkletNode as unknown as typeof globalThis.AudioWorkletNode;
+});
+test.afterEach(() => {
+  globalThis.AudioWorkletNode = previousWorklet;
+});
 class Context {
   static instance: Context;
   currentTime = 0;
   state = "running";
   destination = new Node();
   nodes: Node[] = [];
+  gains: Node[] = [];
   onstatechange?: () => void;
+  audioWorklet = { addModule: async (_url: string) => {} };
   constructor() {
     Context.instance = this;
   }
   async resume() {}
   async close() {}
   createGain() {
-    return new Node();
+    const node = new Node();
+    this.gains.push(node);
+    return node;
   }
   createDynamicsCompressor() {
     return new Node();
@@ -80,29 +124,31 @@ test("lookahead schedules simultaneous voices in audio seconds, then pauses and 
     await engine.play(project);
     const context = Context.instance;
     assert.equal(
-      context.nodes.length,
+      notes().length,
       2,
       "both chord voices are scheduled before the first render frame",
     );
     assert.deepEqual(
-      context.nodes.map((n) => n.started),
+      notes().map((n) => n.time),
       [0.04, 0.04],
     );
     context.currentTime = 0.45;
     Worker.instance.onmessage?.();
-    assert.equal(context.nodes.length, 3);
-    assert.ok(Math.abs(context.nodes[2].started - 0.54) < 1e-8);
+    assert.equal(notes().length, 3);
+    assert.ok(Math.abs(notes()[2].time! - 0.54) < 1e-8);
     context.currentTime = 0.54;
     assert.ok(Math.abs(engine.positionTick - 480) < 1e-8);
     engine.pause();
     assert.ok(
-      context.nodes.every((n) => n.stopped === 0),
+      AudioWorkletNode.instances.every(
+        (n) => n.messages.at(-1)?.type === "panic",
+      ),
       "pause cancels future and active voices",
     );
     await engine.seek(project, 720);
     await engine.play(project);
     assert.equal(
-      context.nodes.length,
+      notes().length,
       5,
       "seek resumes both sustained notes and omits the finished note",
     );
@@ -125,7 +171,7 @@ test("a pending asynchronous play is cancelled by stop", async () => {
     engine.stop();
     await pending;
     assert.equal(engine.playing, false);
-    assert.equal(Context.instance.nodes.length, 0);
+    assert.equal(notes().length, 0);
   } finally {
     engine.dispose();
     globalThis.AudioContext = previousContext;
@@ -147,9 +193,9 @@ test("looping schedules the next cycle before its boundary on the audio clock", 
     const context = Context.instance;
     context.currentTime = 1.95;
     Worker.instance.onmessage?.();
-    assert.equal(context.nodes.length, 2);
+    assert.equal(notes().length, 2);
     assert.equal(
-      context.nodes[1].started,
+      notes()[1].time,
       2.04,
       "next loop is scheduled ahead rather than on a late worker tick",
     );
@@ -159,5 +205,129 @@ test("looping schedules the next cycle before its boundary on the audio clock", 
     engine.dispose();
     globalThis.AudioContext = previousContext;
     globalThis.Worker = previousWorker;
+  }
+});
+
+test("audiobus preserves overlapping unisons, MIDI velocity, track gain and muted tracks", async () => {
+  const context = new Context();
+  const instrument = new ProjectInstrument(
+    context as unknown as AudioContext,
+    context.destination as unknown as AudioNode,
+  );
+  const project = demoProject();
+  project.tracks[0].gain = 0.5;
+  project.tracks.push({ id: "muted", name: "Muted", gain: 1, muted: true });
+  project.notes = Array.from({ length: 17 }, (_, i) => ({
+    ...project.notes[0],
+    id: `unison-${i}`,
+    pitch: 60,
+    velocity: 0.5,
+    start: i,
+    duration: 960,
+  }));
+  project.notes.push({
+    ...project.notes[0],
+    id: "muted-note",
+    trackId: "muted",
+    pitch: 72,
+  });
+  try {
+    await instrument.prepare(project);
+    instrument.scheduleProject(project);
+    assert.equal(
+      AudioWorkletNode.instances.length,
+      2,
+      "a second FM instance keeps the seventeenth overlapping unison independent",
+    );
+    assert.equal(notes().length, 17);
+    assert.ok(
+      notes().every((note) => note.note === 60 && note.velocity === 64 / 127),
+    );
+    assert.ok(
+      context.gains.every((node) => node.gain.value === 0.2),
+      "track gain reaches the output mixer",
+    );
+    const first = AudioWorkletNode.instances[0];
+    assert.deepEqual(
+      first.messages.filter((m) => m.type === "on").map((m) => m.part),
+      Array.from({ length: 16 }, (_, i) => i),
+    );
+    const off = first.messages.filter((m) => m.type === "off");
+    assert.equal(off.length, 16);
+    assert.ok(off[0].time! > 1, "note-off is queued at its future audio time");
+    instrument.silence();
+    assert.ok(
+      AudioWorkletNode.instances.every(
+        (node) => node.messages.at(-1)?.type === "panic",
+      ),
+    );
+    await instrument.prepare({ ...project, notes: [], tracks: [] });
+    assert.equal(
+      AudioWorkletNode.instances.every((node) => node.closed),
+      true,
+      "replacing the project releases unused outputs",
+    );
+  } finally {
+    instrument.dispose();
+  }
+});
+
+test("stop during audiobus worklet loading cannot start queued notes later", async () => {
+  let ready!: () => void;
+  const loading = new Promise<void>((resolve) => {
+    ready = resolve;
+  });
+  class LoadingContext extends Context {
+    audioWorklet = { addModule: () => loading };
+  }
+  const previousContext = globalThis.AudioContext;
+  globalThis.AudioContext = LoadingContext as unknown as typeof AudioContext;
+  const engine = new AudioEngine();
+  try {
+    const playing = engine.play(demoProject());
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    engine.stop();
+    ready();
+    await playing;
+    assert.equal(engine.playing, false);
+    assert.equal(notes().length, 0);
+  } finally {
+    ready();
+    engine.dispose();
+    globalThis.AudioContext = previousContext;
+  }
+});
+
+test("offline FM rendering schedules the same notes without resuming its context", async () => {
+  class OfflineContext extends Context {
+    state = "suspended";
+    async resume(): Promise<void> {
+      throw new Error("Offline rendering cannot resume before it starts");
+    }
+    async startRendering() {}
+  }
+  const context = new OfflineContext();
+  const instrument = new ProjectInstrument(
+    context as unknown as BaseAudioContext,
+    context.destination as unknown as AudioNode,
+  );
+  const project = demoProject();
+  project.notes = [project.notes[0]];
+  try {
+    await instrument.prepare(project);
+    instrument.scheduleProject(project);
+    const messages = AudioWorkletNode.instances[0].messages;
+    assert.equal(
+      messages.find((message) => message.type === "on")?.note,
+      project.notes[0].pitch,
+    );
+    assert.equal(messages.find((message) => message.type === "on")?.time, 0);
+    assert.ok(messages.find((message) => message.type === "off")!.time! > 0);
+    assert.equal(
+      messages.filter((message) => message.type === "patch").length,
+      16,
+    );
+  } finally {
+    instrument.dispose();
   }
 });

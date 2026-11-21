@@ -35,7 +35,7 @@ WebXR Samples uses `eslint` and `prettier` to lint and format code.
 You can format manually by running:
 
 ```
-$ npm run format
+$ pnpm run format
 ```
 
 There are also VSCode extensions that can run those linters / formatters for you. Prettier has a [VSCode Plugin](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode), which allows you to format on save.

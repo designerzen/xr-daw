@@ -505,6 +505,7 @@ input[type="range"] {
   color: #17251f;
 }
 .vinyl-control[hidden],
+#export-notes[hidden],
 .menu-panel label[hidden] {
   display: none;
 }

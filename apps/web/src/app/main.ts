@@ -3,7 +3,14 @@ import projectOptions from "virtual:iwsdk-project";
 import { encodeWav, exportWav } from "./audio";
 import { importMidi } from "./midi";
 import { restoreProject, saveProject } from "./persistence";
-import { demoProject, projectEnd, validateProject } from "./project";
+import { demoProject, projectEnd } from "./project";
+import {
+  MEDIA_ACCEPT,
+  NOTE_EXPORT_FORMATS,
+  importMediaFile,
+  exportNotes,
+  type NoteExportId,
+} from "./media-formats";
 import {
   ALL_TRACKS,
   GRID_DIVISIONS,
@@ -66,9 +73,11 @@ root.innerHTML = `
       <details id="project-menu" class="menu file-menu">
         <summary aria-label="Project menu" title="Project menu">${icon("file")}</summary>
         <div class="menu-panel">
-          <label class="file-button">Open media or project<input id="open" type="file" accept="audio/*,.wav,.wave,.mp3,.ogg,.flac,.m4a,.aiff,.aif,.mid,.midi,.json" /></label>
+          <label class="file-button">Open media or project<input id="open" type="file" accept="${MEDIA_ACCEPT}" /></label>
           <button id="preset">Open demo</button><hr />
           <button id="save">Save project</button><button id="export">Export WAV</button>
+          <label id="note-export-options">Export notes <select id="note-export-format" aria-label="Note export format">${NOTE_EXPORT_FORMATS.map(([id, label]) => `<option value="${id}">${label}</option>`).join("")}</select></label>
+          <button id="export-notes">Export notes</button>
         </div>
       </details>
       <button id="enter-ar" class="enter-xr" disabled hidden>Enter AR</button>
@@ -141,7 +150,7 @@ root.innerHTML = `
     ${iconButton("duplicate", "Repeat after itself (Ctrl+D)", "duplicate")}${iconButton("audition", "Audition note", "audition")}${iconButton("delete", "Delete note", "delete")}
   </section>
   <span id="status" class="status" role="status" aria-live="polite">Starting studio…</span>
-  <div id="drop-target" aria-hidden="true">Drop MIDI or audio</div>
+  <div id="drop-target" aria-hidden="true">Drop music, audio or project</div>
   <output id="project-summary" class="sr-only"></output>
   <output id="position" class="sr-only">Bar 1 · Beat 1</output>
   <output id="selection" class="sr-only">Select a note to edit</output>
@@ -325,6 +334,8 @@ async function start() {
     const select = element<HTMLSelectElement>("track");
     select.disabled = waveform;
     input("tempo").disabled = waveform;
+    element("note-export-options").hidden = waveform;
+    button("export-notes").hidden = waveform;
     if (trackKey !== nextTrackKey) {
       select.replaceChildren(
         ...[{ id: ALL_TRACKS, name: "All tracks" }, ...project.tracks].map(
@@ -704,6 +715,19 @@ async function start() {
       button("export").disabled = false;
     }
   });
+  handle("export-notes", async () => {
+    button("export-notes").disabled = true;
+    try {
+      const format = element<HTMLSelectElement>("note-export-format")
+        .value as NoteExportId;
+      const info = NOTE_EXPORT_FORMATS.find(([id]) => id === format)!;
+      const blob = await exportNotes(session.store.project, format);
+      download(blob, `${fileName()}.${info[2]}`);
+      status(`${info[1]} exported`);
+    } finally {
+      button("export-notes").disabled = false;
+    }
+  });
   handle("preset", async () => {
     const request = ++mediaRequest;
     session.clipPlayer.cancelDecode();
@@ -723,14 +747,10 @@ async function start() {
     const request = ++mediaRequest;
     session.clipPlayer.cancelDecode();
     try {
-      const musical = /\.(json|midi?)$/i.test(file.name);
-      if (file.size > (musical ? 10 : 100) * 1024 * 1024)
-        throw new Error(
-          musical
-            ? "MIDI and project files must be smaller than 10 MB."
-            : "Audio files must be smaller than 100 MB.",
-        );
-      if (!musical) {
+      status("Opening file…");
+      const imported = await importMediaFile(file);
+      if (request !== mediaRequest || destroyed) return;
+      if (imported.kind === "audio") {
         status("Decoding audio and analyzing spectrum…");
         element("status").classList.add("visible");
         const clip = await session.clipPlayer.decode(file);
@@ -746,14 +766,7 @@ async function start() {
         status("Audio ready · click to play, drag to scratch");
         return;
       }
-      const project = /\.json$/i.test(file.name)
-        ? validateProject(JSON.parse(await file.text()))
-        : importMidi(
-            new Uint8Array(await file.arrayBuffer()),
-            file.name.replace(/\.midi?$/i, ""),
-          );
-      if (request !== mediaRequest || destroyed) return;
-      session.load(project);
+      session.load(imported.project);
       status("Project loaded");
     } catch (error) {
       if (request === mediaRequest && !destroyed) report(error);

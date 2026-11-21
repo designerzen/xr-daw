@@ -8,7 +8,7 @@ Winner of **Most Innovative App at MuseHub 2024**.
 
 ## Making music
 
-Start with the included song or open a `.mid` or `.midi` file from your device. Notes encode musical data in three dimensions: horizontal position represents time, vertical position represents pitch, length represents duration, and depth represents velocity. Louder notes extend farther from a shared rear plane, so you can compare their dynamics spatially.
+Start with the included song or drop a supported music file from your device. Notes encode musical data in three dimensions: horizontal position represents time, vertical position represents pitch, length represents duration, and depth represents velocity. Louder notes extend farther from a shared rear plane, so you can compare their dynamics spatially.
 
 - Drag notes with a mouse or point and grab with a VR controller or hand ray. Edits snap to the grid, a sixteenth note unless you choose another size (or Off) in the tool palette.
 - Use the transport to play, pause, and stop. Every track is shown at once, each in its own colour; choose a single track to focus on it, and adjust the tempo as you listen. Selecting a note makes its track the one that new notes and the track level and mute controls apply to.
@@ -21,6 +21,27 @@ Start with the included song or open a `.mid` or `.midi` file from your device. 
 - Open the project menu to save a portable project or export a stereo WAV file.
 
 Projects autosave in your browser on your device. Download a project file to keep a copy or move it to another computer. Reopening that file restores its notes, tracks, levels, and tempo map.
+
+## Music files
+
+Drop a file anywhere on the app, or choose **Open media or project** in the project menu. Musical files open as editable 3D notes; audio opens as a waveform.
+
+| Files | Import | Export notes |
+| --- | --- | --- |
+| MIDI (`.mid`, `.midi`, `.kar`) and RIFF MIDI (`.rmi`, `.rmid`) | Yes | Yes |
+| MusicXML and compressed MusicXML (`.musicxml`, `.xml`, `.mxl`) | Yes | Yes |
+| DAWproject (`.dawproject`) | Yes | Yes |
+| ABC, MIDI CSV, MML, RTTTL | Yes | Yes |
+| Guitar Pro 3–8, Capella, alphaTex | Yes | Guitar Pro 7 and alphaTex |
+| NoteSequence, Tone.js JSON, JAMS, UTAU, Sonic Visualiser | Yes | Yes |
+| Synthesizer V, OpenUtau, UtaFormatix, LMMS (`.mmp`, `.mpt`, `.mmpz`) | Yes | Yes |
+| Tracker modules, including MOD, XM, IT, S3M and MED | Notes only | No |
+| LilyPond | No | Yes |
+| ZIP containing exactly one MIDI file | Yes | No |
+
+Choose a format under **Export notes** in the project menu and press **Export notes** to download it. **Save project** preserves the complete XR DAW session; **Export WAV** renders its sound.
+
+MIDI and XR DAW projects preserve the tempo map. Other note imports retain performed timing on a 120 BPM grid. Other note exports use the first project tempo and begin at the first note; score formats may quantize rhythms. These exports support up to 15 melodic tracks. RTTTL requires a single melody. Tracker samples and effects, lyrics, plugin settings and score engraving do not become part of the XR DAW project. Musical containers are limited to 64 MB; MIDI files to 10 MB. Unsupported or invalid files leave the current project intact.
 
 ## Audio waveforms
 
@@ -36,7 +57,7 @@ Enable **Vinyl** in the transport to hear the audio through [rauchg/vinyl](https
 
 With Vinyl enabled, **Export WAV** renders the selected vinyl condition; **Download audio** always keeps the original file. Multichannel audio is folded into a stereo groove for Vinyl playback. The engine source and MIT license are included under `apps/web/public/vendor/vinyl`.
 
-Playback uses a polyphonic triangle synthesizer. MIDI formats 0 and 1 are supported, including multiple tracks and tempo changes. Bar labels use 4/4 time. WAV export supports projects up to ten minutes long.
+MIDI playback and WAV export use audiobus's polyphonic FM synthesizer. MIDI formats 0 and 1 are supported, including multiple tracks and tempo changes. Bar labels use 4/4 time. WAV export supports projects up to ten minutes long.
 
 ## Virtual reality
 
@@ -91,26 +112,27 @@ Shortcuts apply while the scene has focus.
 
 ## Local development
 
-Install **Node.js 22.12 or later** and npm, then clone the repository:
+Install **Node.js 22.12 or later** and [pnpm](https://pnpm.io/installation), then clone the repository with its submodules:
 
 ```sh
-git clone https://github.com/designerzen/xr-daw.git
+git clone --recurse-submodules https://github.com/designerzen/xr-daw.git
 cd xr-daw
-npm ci
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 Open `https://localhost:8081/`. The development server uses a self-signed HTTPS certificate; your browser may ask you to accept it.
 
-The repository uses npm workspaces and Turborepo. The web application lives in `apps/web`, including its source, assets, spatial UI, and tests. Run commands from the repository root:
+The repository uses pnpm workspaces and Turborepo. The web application lives in `apps/web`, including its source, assets, spatial UI, and tests. The [netronome](https://github.com/designerzen/netronome) timing library and the [audiobus](https://github.com/designerzen/audiobus) audio engine are git submodules under `packages/`, linked into the app as workspace packages. Run commands from the repository root:
 
 ```sh
-npm test             # Run unit tests
-npm run typecheck    # Check TypeScript
-npm run build        # Type-check and build the app
-npm run check        # Run tests, type checks, and the build
-npm run serve        # Preview the production build
-npm run format       # Format application code and tests
+pnpm test                    # Run unit tests
+pnpm run typecheck           # Check TypeScript
+pnpm run build               # Type-check and build the app
+pnpm run check               # Run tests, type checks, and the build
+pnpm run serve               # Preview the production build
+pnpm run format              # Format application code and tests
+pnpm run upgrade:packages    # Move the submodules to their latest upstream commits
 ```
 
 Turborepo caches successful builds, tests, and type checks. Development servers and formatting tasks run without caching.
@@ -136,7 +158,7 @@ See [development and testing](docs/development.md) for browser automation and XR
 ## Build and deploy
 
 ```sh
-npm run build
+pnpm run build
 ```
 
 Upload the contents of `apps/web/dist` to a static host. The build supports hosting under a project subpath.

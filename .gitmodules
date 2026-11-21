@@ -1,0 +1,7 @@
+[submodule "packages/netronome"]
+	path = packages/netronome
+	url = https://github.com/designerzen/netronome.git
+[submodule "packages/audiobus"]
+	path = packages/audiobus
+	url = https://github.com/designerzen/audiobus.git
+	branch = main
