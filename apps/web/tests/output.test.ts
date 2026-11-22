@@ -67,8 +67,48 @@ test("output history is bounded, throttled and resets when its audio clock chang
   for (let i = 1; i < 200; i++) history.capture(frame(i / 20));
   history.point("scope", 47, 127, point);
   assert.ok([...point].every(Number.isFinite));
-  assert.equal(point[3], 0, "low frame rates do not pile expired samples onto the rear plane");
+  assert.equal(
+    point[3],
+    0,
+    "low frame rates do not pile expired samples onto the rear plane",
+  );
   history.clear();
   history.point("spectrum", 0, 0, point);
   assert.equal(point[3], 0, "empty history never draws invented sound");
+});
+
+test("floor scope folds both waveform polarities upward without stereo cancellation", () => {
+  const history = new OutputHistory(),
+    point = new Float32Array(6);
+  const first = frame(1);
+  first.leftWave.set([0.7, -0.7, 0, 0.2]);
+  first.rightWave.set([-0.7, 0.7, 0, -0.5]);
+  history.capture(first);
+  const heights = [];
+  for (let index = 0; index < 4; index++) {
+    history.point("floor", 0, index, point);
+    assert.ok(
+      Math.abs(point[1] - 0.02) < 1e-6,
+      "the underside remains on the floor",
+    );
+    heights.push(point[5]);
+  }
+  assert.ok(Math.abs(heights[0] - 0.7) < 1e-6);
+  assert.equal(
+    heights[0],
+    heights[1],
+    "equal positive and negative excursions produce equal upward peaks",
+  );
+  assert.equal(heights[2], 0);
+  assert.equal(
+    heights[3],
+    0.5,
+    "the stronger channel is retained rather than averaged away",
+  );
+  history.capture(frame(1.1));
+  history.point("floor", 1, 0, point);
+  assert.ok(
+    point[2] < -1.4,
+    "older folded waveforms extend across the floor in depth",
+  );
 });

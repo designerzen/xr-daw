@@ -68,6 +68,7 @@ Use the output selector beside **Notes** and **Velocity** to see the sound being
 | **Spectrum** | X is logarithmic frequency from 20 Hz to 20 kHz (or the audio's Nyquist limit), Y is spectral level, and Z is recent time. Paired dots separate left and right channels. |
 | **Rings** | Frequency wraps around each ring, spectral level changes its radius, and recent time stacks vertically. Left and right channels form separate nested traces. |
 | **Stereo scope** | Left waveform samples control X, right samples control Y, and recent time runs along Z. Correlated stereo forms a diagonal; differences between the channels open it into shapes. |
+| **Floor scope** | A waveform with a flat underside on the floor. Positive and negative excursions both become upward peaks using the greater of `abs(left)` and `abs(right)`, so opposite-phase stereo cannot cancel. X runs through the waveform window; depth shows recent history. |
 
 The views retain up to 1.6 seconds of audio-clock history. Spectrum and ring colours show frequency; scope colours follow position within the waveform window. Point size and brightness show signal level. Silence creates no new visible points. The desktop camera switches to 3D for these views; drag or touch to orbit and zoom, and move naturally around them in VR. Switching output off restores the previous desktop camera mode.
 

@@ -18,6 +18,10 @@ export const OUTPUT_MODES = {
     label: "Stereo scope",
     axes: "X: left waveform · Y: right waveform · Z: history",
   },
+  floor: {
+    label: "Floor scope",
+    axes: "X: waveform time · Height: folded amplitude · Depth: history",
+  },
 } as const;
 export type OutputMode = keyof typeof OUTPUT_MODES;
 export const HISTORY_ROWS = 48;
@@ -88,6 +92,22 @@ export class OutputHistory {
       out[0] = Math.cos(angle) * radius;
       out[1] = 0.95 + time * 1.3;
       out[2] = -2.1 + Math.sin(angle) * radius;
+    } else if (mode === "floor") {
+      // Full-wave rectification: either polarity rises from the same flat floor.
+      // Taking the stronger channel also keeps opposite-phase stereo from cancelling.
+      const amplitude = Math.min(
+        1,
+        Math.max(
+          Math.abs(this.leftWave[row * OUTPUT_SAMPLES + index]),
+          Math.abs(this.rightWave[row * OUTPUT_SAMPLES + index]),
+        ),
+      );
+      out[0] = -1.55 + (index / (OUTPUT_SAMPLES - 1)) * 3.1;
+      out[1] = 0.02;
+      out[2] = -1.4 - time * 1.4;
+      out[3] = amplitude < 0.001 ? 0 : 1;
+      out[4] = (index / (OUTPUT_SAMPLES - 1)) * 0.75;
+      out[5] = amplitude;
     } else {
       const left = this.leftWave[row * OUTPUT_SAMPLES + index];
       const right = this.rightWave[row * OUTPUT_SAMPLES + index];

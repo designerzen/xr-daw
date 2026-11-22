@@ -28,7 +28,7 @@ export default async function run({ frame }) {
     }, view);
   }
   // Cycle the same live output modes from the spatial transport menu.
-  for (const mode of ["spectrum", "rings", "scope", "off"]) {
+  for (const mode of ["spectrum", "rings", "scope", "floor", "off"]) {
     await frame.evaluate(() =>
       window.FRAMEWORK_MCP_RUNTIME.world
         .requireSceneObject("transport")

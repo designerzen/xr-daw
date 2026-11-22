@@ -42,7 +42,7 @@ export default async function run({ frame, page }) {
     await frame.locator("#output-mode").selectOption("spectrum");
     await frame.locator("#play").click();
     const modes = [];
-    for (const mode of ["spectrum", "rings", "scope"]) {
+    for (const mode of ["spectrum", "rings", "scope", "floor"]) {
       await frame.locator("#output-mode").selectOption(mode);
       await frame.waitForFunction((mode) => {
         const particles =
@@ -65,9 +65,11 @@ export default async function run({ frame, page }) {
             max = [-Infinity, -Infinity, -Infinity];
           const data = particles.instanceMatrix.array;
           let active = 0;
+          let height = 0;
           for (let i = 0; i < particles.count; i++) {
             if (data[i * 16] <= 0) continue;
             active++;
+            height = Math.max(height, data[i * 16 + 5]);
             for (let axis = 0; axis < 3; axis++) {
               min[axis] = Math.min(min[axis], data[i * 16 + 12 + axis]);
               max[axis] = Math.max(max[axis], data[i * 16 + 12 + axis]);
@@ -76,6 +78,7 @@ export default async function run({ frame, page }) {
           return {
             ...particles.userData,
             active,
+            height,
             ranges: max.map((value, axis) => value - min[axis]),
             boardVisible: world.scene.getObjectByName("Sequencer view").visible,
           };
@@ -89,10 +92,18 @@ export default async function run({ frame, page }) {
     }
     for (const mode of modes) {
       assert.ok(mode.active > 10, mode.mode);
-      assert.ok(
-        mode.ranges.every((range) => range > 0.01),
-        `${mode.mode} uses all three spatial axes`,
-      );
+      if (mode.mode === "floor") {
+        assert.ok(mode.ranges[0] > 0.01 && mode.ranges[2] > 0.01);
+        assert.ok(mode.ranges[1] < 1e-6, "all columns share one flat baseline");
+        assert.ok(
+          mode.height > 0.001,
+          "rectified peaks extend upward from the flat side",
+        );
+      } else
+        assert.ok(
+          mode.ranges.every((range) => range > 0.01),
+          `${mode.mode} uses all three spatial axes`,
+        );
       assert.equal(mode.boardVisible, false);
     }
     await frame.locator("#stop").click();

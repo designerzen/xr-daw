@@ -9,6 +9,9 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
+  PlaneGeometry,
+  DoubleSide,
+  type BufferGeometry,
   Sprite,
   SpriteMaterial,
 } from "@iwsdk/core";
@@ -26,10 +29,21 @@ export function outputSystem(session: Session) {
   return class OutputSystem extends createSystem({}) {
     private root = new Group();
     private history = new OutputHistory();
-    private particles = new InstancedMesh(
-      new IcosahedronGeometry(1, 0),
+    private pointGeometry = new IcosahedronGeometry(1, 0);
+    private floorGeometry = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+    private particles = new InstancedMesh<BufferGeometry, MeshBasicMaterial>(
+      this.pointGeometry,
       new MeshBasicMaterial(),
       HISTORY_ROWS * POINTS_PER_ROW,
+    );
+    private floor = new Mesh(
+      new PlaneGeometry(3.3, 1.5),
+      new MeshBasicMaterial({
+        color: 0x587e99,
+        transparent: true,
+        opacity: 0.18,
+        side: DoubleSide,
+      }),
     );
     private bounds = new Mesh(
       new BoxGeometry(3.3, 1.5, 2.2),
@@ -59,14 +73,23 @@ export function outputSystem(session: Session) {
       this.particles.raycast = () => {};
       this.bounds.position.set(0, 1.6, -2.1);
       this.bounds.raycast = () => {};
+      this.floor.name = "Output scope floor";
+      this.floor.rotation.x = -Math.PI / 2;
+      this.floor.position.set(0, 0.015, -2.1);
+      this.floor.raycast = () => {};
+      this.floor.userData.fitIgnore = true;
+      this.floor.visible = false;
       this.label.position.set(0, 2.48, -2.1);
       this.label.scale.set(3.25, 0.17, 1);
       this.label.raycast = () => {};
-      this.root.add(this.particles, this.bounds, this.label);
+      this.root.add(this.particles, this.bounds, this.label, this.floor);
       this.world.createTransformEntity(this.root);
       this.cleanupFuncs.push(() => {
         this.particles.dispose();
-        this.particles.geometry.dispose();
+        this.pointGeometry.dispose();
+        this.floorGeometry.dispose();
+        this.floor.geometry.dispose();
+        this.floor.material.dispose();
         this.particles.material.dispose();
         this.bounds.geometry.dispose();
         this.bounds.material.dispose();
@@ -86,6 +109,11 @@ export function outputSystem(session: Session) {
       const source = session.view === "waveform" ? "audio" : "midi";
       const changed = mode !== this.mode || source !== this.source;
       if (changed) {
+        this.particles.geometry =
+          mode === "floor" ? this.floorGeometry : this.pointGeometry;
+        this.floor.visible = mode === "floor";
+        this.bounds.position.y = mode === "floor" ? 0.72 : 1.6;
+        this.label.position.y = mode === "floor" ? 1.6 : 2.48;
         if (source !== this.source || this.mode === "off") this.history.clear();
         this.mode = mode;
         this.source = source;
@@ -110,7 +138,16 @@ export function outputSystem(session: Session) {
         for (let index = 0; index < POINTS_PER_ROW; index++) {
           this.history.point(mode, age, index, this.point);
           const [x, y, z, size, hue, level] = this.point;
-          this.matrix.makeScale(size, size, size).setPosition(x, y, z);
+          if (mode === "floor") {
+            // Geometry is anchored at y=0, so every column has an exactly flat underside.
+            this.matrix
+              .makeScale(
+                size ? 0.019 : 0,
+                size ? level * 1.3 : 0,
+                size ? 0.024 : 0,
+              )
+              .setPosition(x, y, z);
+          } else this.matrix.makeScale(size, size, size).setPosition(x, y, z);
           const instance = age * POINTS_PER_ROW + index;
           this.particles.setMatrixAt(instance, this.matrix);
           this.color.setHSL(hue, 0.8, 0.3 + level * 0.4);
