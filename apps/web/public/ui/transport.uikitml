@@ -23,6 +23,7 @@
     <Button id="exit"><ButtonLabel>Exit</ButtonLabel></Button>
   </div>
   <div id="advanced" class="options" style="display: none">
+    <div class="row"><Button id="output-mode"><ButtonLabel id="output-label">Output off</ButtonLabel></Button></div>
     <div id="vinyl-options" class="row" style="display: none">
       <Button id="vinyl"><ButtonLabel>Vinyl</ButtonLabel></Button>
       <Button id="condition"><ButtonLabel id="condition-label">Worn</ButtonLabel></Button>

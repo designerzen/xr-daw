@@ -1,5 +1,6 @@
 import { scratchRate, type WaveAnalysis } from "./spectrum";
 import { VinylPlayback, type VinylCondition } from "./vinyl-playback";
+import { OutputAnalysis } from "./output-analysis";
 
 export interface AudioClip {
   name: string;
@@ -13,6 +14,7 @@ export interface AudioClip {
 export class ClipPlayer {
   private context?: AudioContext;
   private master?: GainNode;
+  private analysis?: OutputAnalysis;
   private source?: AudioBufferSourceNode;
   private envelope?: GainNode;
   private offset = 0;
@@ -38,6 +40,11 @@ export class ClipPlayer {
 
   get loop() {
     return this.looping;
+  }
+  readOutput() {
+    if (!this.context || !this.master) return;
+    this.analysis ??= new OutputAnalysis(this.context, this.master);
+    return this.analysis.read();
   }
   set loop(value: boolean) {
     this.looping = value;
@@ -321,6 +328,7 @@ export class ClipPlayer {
     this.stop();
     this.cancelDecode();
     this.vinyl?.dispose();
+    this.analysis?.dispose();
     void this.context?.close();
   }
 }

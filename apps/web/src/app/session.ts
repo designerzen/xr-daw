@@ -1,5 +1,6 @@
 import { AudioEngine } from "./audio";
 import { ClipPlayer, type AudioClip } from "./clip-player";
+import { OUTPUT_MODES, type OutputMode } from "./output-history";
 import {
   ProjectStore,
   projectEnd,
@@ -32,6 +33,17 @@ export class Session {
   trackId: string;
   allTracks = true;
   view: "notes" | "velocity" | "waveform" = "notes";
+  outputMode: OutputMode = "off";
+  setOutputMode(mode: OutputMode) {
+    this.outputMode = mode;
+    this.emit();
+  }
+  cycleOutputMode() {
+    const modes = Object.keys(OUTPUT_MODES) as OutputMode[];
+    this.setOutputMode(
+      modes[(modes.indexOf(this.outputMode) + 1) % modes.length],
+    );
+  }
   tool: EditTool = "select";
   grid: GridDivision = 4;
   /** New notes take the length and velocity of the note last drawn, resized or picked. */

@@ -9,6 +9,7 @@ import { NOTE_ON } from "audiobus/commands/commands.ts";
  */
 export class OfflineInstrument {
   private node?: AudioWorkletNode;
+  private messages: Record<string, unknown>[] = [];
   readonly output: GainNode;
 
   constructor(
@@ -31,35 +32,45 @@ export class OfflineInstrument {
     await loadCaptureWorklet(
       this.context,
       name,
-      `(${registerFMProcessor.toString()})(${JSON.stringify({ name })})`,
+      `const registerFM = registerProcessor;
+      ((registerProcessor) => { (${registerFMProcessor.toString()})(${JSON.stringify({ name })}); })
+      ((name, Processor) => registerFM(name, class extends Processor {
+        constructor(options) {
+          super(options);
+          for (const data of options.processorOptions.events) this.port.onmessage({ data });
+        }
+      }));`,
     );
-    this.node = new AudioWorkletNode(this.context, name, {
+  }
+
+  /** Deliver the complete queue synchronously inside the processor constructor. Offline
+   * rendering can otherwise finish before MessagePort note/patch messages arrive.
+   */
+  flush() {
+    if (this.node) return;
+    this.node = new AudioWorkletNode(this.context, "harmoneasy-fm", {
       numberOfInputs: 0,
       numberOfOutputs: 1,
       outputChannelCount: [2],
-      processorOptions: { polyphony: 64 },
+      processorOptions: { polyphony: 64, events: this.messages },
     });
     this.node.connect(this.output);
-    for (let part = 0; part < 16; part++) {
-      this.node.port.postMessage({
-        type: "patch",
-        part,
-        patch: FM_GENERAL_MIDI_PRESETS[0],
-      });
-    }
+    this.messages = [];
   }
 
   async sendCommand(command: IAudioCommand) {
-    this.node!.port.postMessage({
+    this.messages.push({
       type: command.type === NOTE_ON && command.velocity > 0 ? "on" : "off",
       part: command.channel - 1,
       note: command.number,
       velocity: command.velocity / 127,
       time: command.audioTime,
+      patch: command.type === NOTE_ON ? FM_GENERAL_MIDI_PRESETS[0] : undefined,
     });
   }
 
   allNotesOff() {
+    this.messages = [];
     this.node?.port.postMessage({ type: "panic" });
   }
 

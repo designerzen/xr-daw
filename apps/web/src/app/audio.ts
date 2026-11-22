@@ -1,5 +1,6 @@
 import { Timer, TIMER_TYPE_AUDIO_WORKLET } from "netronome";
 import { ProjectInstrument } from "./instrument";
+import { OutputAnalysis } from "./output-analysis";
 import {
   projectEnd,
   secondsToTick,
@@ -26,6 +27,8 @@ export function compileNotes(project: Project): TimedNote[] {
 export class AudioEngine {
   private context?: AudioContext;
   private master?: GainNode;
+  private output?: AudioNode;
+  private analysis?: OutputAnalysis;
   private instrument?: ProjectInstrument;
   private clock?: Timer;
   private worker?: Worker;
@@ -50,6 +53,7 @@ export class AudioEngine {
       limiter.threshold.value = -6;
       limiter.ratio.value = 12;
       this.master.connect(limiter).connect(this.context.destination);
+      this.output = limiter;
       this.instrument = new ProjectInstrument(this.context, this.master);
       this.context.onstatechange = () => {
         if (this.context?.state === "suspended" && this.playing) this.pause();
@@ -64,6 +68,11 @@ export class AudioEngine {
     return this.loop && this.duration > 0
       ? elapsed % this.duration
       : Math.min(this.duration, elapsed);
+  }
+  readOutput() {
+    if (!this.context || !this.output) return;
+    this.analysis ??= new OutputAnalysis(this.context, this.output);
+    return this.analysis.read();
   }
   get positionTick() {
     return this.project ? secondsToTick(this.project, this.positionSeconds) : 0;
@@ -219,6 +228,7 @@ export class AudioEngine {
     this.worker?.terminate();
     if (this.workerUrl) URL.revokeObjectURL(this.workerUrl);
     this.instrument?.dispose();
+    this.analysis?.dispose();
     void this.context?.close();
   }
 }

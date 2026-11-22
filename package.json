@@ -26,6 +26,7 @@
     "test:editing": "pnpm --filter @xr-daw/web run test:editing",
     "test:media": "pnpm --filter @xr-daw/web run test:media",
     "test:formats": "pnpm --filter @xr-daw/web run test:formats",
+    "test:output": "pnpm --filter @xr-daw/web run test:output",
     "test:vinyl": "pnpm --filter @xr-daw/web run test:vinyl",
     "test:xr": "pnpm --filter @xr-daw/web run test:xr",
     "test:ar": "pnpm --filter @xr-daw/web run test:ar"

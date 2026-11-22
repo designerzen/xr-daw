@@ -21,6 +21,8 @@ import {
 } from "./session";
 import { BOARD, sequencerSystem } from "./sequencer-system";
 import { waveformSystem } from "./waveform-system";
+import { outputSystem } from "./output-system";
+import { OUTPUT_MODES, type OutputMode } from "./output-history";
 import type { VinylCondition } from "./vinyl-playback";
 import {
   CAMERA_MODES,
@@ -88,6 +90,11 @@ root.innerHTML = `
     <button id="view-notes" type="button" aria-pressed="true">Notes</button>
     <button id="view-velocity" type="button" aria-pressed="false">Velocity</button>
     <button id="view-waveform" type="button" aria-pressed="false" hidden>Waveform</button>
+    <select id="output-mode" aria-label="3D output visualisation" title="Visualise the live output in 3D">${Object.entries(
+      OUTPUT_MODES,
+    )
+      .map(([id, mode]) => `<option value="${id}">${mode.label}</option>`)
+      .join("")}</select>
   </nav>
   <nav class="scene-tools" aria-label="Scene navigation">
     <select id="camera-mode" aria-label="Camera" title="Camera: 3D perspective, or flat and oblique views that keep every bar and pitch the same size">${Object.entries(
@@ -279,8 +286,11 @@ async function start() {
       localStorage.getItem("xr-daw.camera");
   } catch {}
   let lastView = session.view;
+  let lastOutput = session.outputMode;
+  let editorCamera: CameraMode = navigation.mode;
   world.registerSystem(sequencerSystem(session));
   world.registerSystem(waveformSystem(session));
+  world.registerSystem(outputSystem(session));
   let lastRevision = session.store.revision;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let trackKey = "";
@@ -288,6 +298,15 @@ async function start() {
 
   function sync() {
     const waveform = session.view === "waveform";
+    element<HTMLSelectElement>("output-mode").value = session.outputMode;
+    if (session.outputMode !== lastOutput) {
+      if (lastOutput === "off") {
+        editorCamera = navigation.mode;
+        setCameraMode("perspective");
+      } else if (session.outputMode === "off") setCameraMode(editorCamera);
+      lastOutput = session.outputMode;
+      navigation.fit();
+    }
     if (session.view !== lastView) {
       lastView = session.view;
       navigation.fit();
@@ -526,6 +545,10 @@ async function start() {
   handle("view-notes", () => session.setView("notes"));
   handle("view-velocity", () => session.setView("velocity"));
   handle("view-waveform", () => session.setView("waveform"));
+  element<HTMLSelectElement>("output-mode").onchange = () =>
+    session.setOutputMode(
+      element<HTMLSelectElement>("output-mode").value as OutputMode,
+    );
   handle("previous", () => session.page(-1));
   handle("next", () => session.page(1));
   handle("follow", () => session.toggleFollow());

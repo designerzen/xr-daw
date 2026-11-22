@@ -20,6 +20,7 @@
     "test:editing": "iwsdk browser run tests/browser-editing.mjs --timeout 110000",
     "test:media": "iwsdk browser run tests/browser-media.mjs --timeout 110000",
     "test:formats": "iwsdk browser run tests/browser-formats.mjs --timeout 110000",
+    "test:output": "iwsdk browser run tests/browser-output.mjs --timeout 110000",
     "test:vinyl": "iwsdk browser run tests/browser-vinyl.mjs --timeout 110000",
     "test:xr": "iwsdk browser run tests/xr-enter.mjs",
     "test:ar": "iwsdk browser run tests/xr-ar.mjs"

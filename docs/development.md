@@ -38,6 +38,7 @@ pnpm run test:scroll
 pnpm run test:editing
 pnpm run test:media
 pnpm run test:formats
+pnpm run test:output
 pnpm run test:vinyl
 pnpm run test:xr
 pnpm run test:ar
@@ -61,6 +62,8 @@ The media test generates stereo WAV audio with known frequencies, drops MIDI and
 
 The formats test exports every note format, reimports the readable formats, drops them through the website's shared loading path, and checks pitch and timing. It also imports a generated ProTracker module through the real libopenmpt WASM and checks the export menu's download. Node tests cover the native MIDI tempo-map round trip and browser-independent converters.
 
+The output test checks live MIDI in each spatial mode, verifies nonzero geometry on all three axes, then checks audio-file output and restores the editing view. A real stereo oscillator fixture verifies channel separation and post-gain silence. Repeated fresh offline contexts check that WAV rendering receives its note queue. The XR entry test also cycles modes through the spatial transport.
+
 The vinyl browser test enables the real AudioWorklet, checks program seeking and negative platter speed while dragging, changes pressing condition, and downloads the rendered vinyl WAV.
 
 The XR entry check enters VR through the app button. For other SDK commands, run the CLI from the app workspace:
@@ -74,6 +77,8 @@ npx @iwsdk/cli ecs find --input-json '{"withComponents":["NoteView"]}'
 An active emulated session is required to inspect controller poses and grabbing. Physical headset input, Bluetooth hardware, and audio latency require device testing.
 
 ## Audio and MIDI modules
+
+`output-analysis.ts` lazily creates a stereo GainNode/ChannelSplitter/AnalyserNode tap after the MIDI limiter or audio player's master gain. The audible route stays connected directly to its destination. FFT size is 2048 with 64 logarithmic bands per channel; time-domain readings supply the stereo scope. `output-history.ts` retains up to 48 snapshots at 30 Hz using AudioContext timestamps. `output-system.ts` renders a fixed pool of 6,144 instanced particles, reusing matrices, colours and buffers; it samples only while an output mode is active. The output mode is separate from the source view, so switching displays does not change the playback transport. Disposal disconnects the analyser taps and releases scene resources.
 
 `media-formats.ts` adapts audiobus's format detector, musical importers and note exporters to the app's `Project` model. Heavy notation and tracker engines load on demand. New formats return commands in seconds, converted to a fixed 120 BPM project axis; standard MIDI uses `midi.ts` to retain its tick-based tempo map. Export recordings pair notes with unique input identities so overlapping unisons keep their durations. The native MIDI writer preserves tracks, velocities, leading silence and tempo changes; audiobus interchange exporters normalize their origin to the first note and use one export tempo. XR DAW JSON bypasses generic music-JSON detection. Archive imports never load instrument code.
 

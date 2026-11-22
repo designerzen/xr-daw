@@ -27,6 +27,27 @@ export default async function run({ frame }) {
       return Math.abs(angle - (view === "velocity" ? -Math.PI / 2 : 0)) < 1e-6;
     }, view);
   }
+  // Cycle the same live output modes from the spatial transport menu.
+  for (const mode of ["spectrum", "rings", "scope", "off"]) {
+    await frame.evaluate(() =>
+      window.FRAMEWORK_MCP_RUNTIME.world
+        .requireSceneObject("transport")
+        .requireElementById("output-mode")
+        .dispatchEvent({ type: "click" }),
+    );
+    await frame.waitForFunction((mode) => {
+      const root =
+        window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName("Live output");
+      const particles =
+        window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName(
+          "Live output particles",
+        );
+      return (
+        root.visible === (mode !== "off") &&
+        (mode === "off" || particles.userData.mode === mode)
+      );
+    }, mode);
+  }
   const waveformAvailable = await frame.evaluate(
     () =>
       !!window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName(

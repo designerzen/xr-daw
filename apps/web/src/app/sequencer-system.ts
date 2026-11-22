@@ -28,6 +28,7 @@ import { NoteView } from "./components";
 import { projectEnd, snapTick, type Note } from "./project";
 import { ALL_TRACKS, GRID_DIVISIONS, Session } from "./session";
 import { MAX_NOTE_DEPTH, noteDepth } from "./note-depth";
+import { OUTPUT_MODES } from "./output-history";
 
 const LEFT = -1.6;
 const WIDTH = 3.2;
@@ -197,6 +198,7 @@ export function sequencerSystem(session: Session) {
         "view-notes": () => session.setView("notes"),
         "view-velocity": () => session.setView("velocity"),
         "view-waveform": () => session.setView("waveform"),
+        "output-mode": () => session.cycleOutputMode(),
         vinyl: () => {
           if (session.view !== "waveform" || session.clipPlayer.vinylBusy)
             return;
@@ -668,7 +670,12 @@ export function sequencerSystem(session: Session) {
         );
       }
       if (this.dirty && this.dragging.size === 0) {
-        this.viewPivot.visible = session.view !== "waveform";
+        this.viewPivot.visible =
+          session.view !== "waveform" && session.outputMode === "off";
+        this.world
+          .requireSceneObject<UIKitMLAsset>("transport")
+          .requireElementById("output-label")
+          .setProperties({ text: OUTPUT_MODES[session.outputMode].label });
         this.viewPivot.rotation.x =
           session.view === "velocity" ? -Math.PI / 2 : 0;
         const panel = this.world.requireSceneObject<UIKitMLAsset>("transport");

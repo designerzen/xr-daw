@@ -48,12 +48,17 @@ class AudioWorkletNode extends Node {
       this.closed = true;
     },
   };
-  constructor(_context: unknown, name: string) {
+  constructor(
+    _context: unknown,
+    name: string,
+    options?: { processorOptions?: { events?: AudioWorkletNode["messages"] } },
+  ) {
     super();
     // Exercise the worker-clock fallback independently of the FM instrument worklet.
     if (name !== "harmoneasy-fm")
       throw new Error("Clock worklet unavailable in test");
     AudioWorkletNode.instances.push(this);
+    this.messages.push(...(options?.processorOptions?.events ?? []));
   }
 }
 function notes() {
@@ -323,9 +328,13 @@ test("offline FM rendering schedules the same notes without resuming its context
     );
     assert.equal(messages.find((message) => message.type === "on")?.time, 0);
     assert.ok(messages.find((message) => message.type === "off")!.time! > 0);
-    assert.equal(
-      messages.filter((message) => message.type === "patch").length,
-      16,
+    assert.ok(
+      (
+        messages.find((message) => message.type === "on") as unknown as {
+          patch: unknown;
+        }
+      ).patch,
+      "the patch and note queue are supplied at worklet construction",
     );
   } finally {
     instrument.dispose();

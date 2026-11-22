@@ -114,7 +114,7 @@ export class SceneNavigation {
   setMode(mode: CameraMode) {
     this.mode = mode;
     this.camera.userData.parallelProjection = this.parallel && !this.immersive;
-    if (!this.parallel) {
+    if (!this.parallel && !this.immersive) {
       this.camera.updateProjectionMatrix();
       this.camera.position.copy(this.homePosition);
       this.camera.quaternion.copy(this.homeQuaternion);

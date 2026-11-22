@@ -59,6 +59,18 @@ With Vinyl enabled, **Export WAV** renders the selected vinyl condition; **Downl
 
 MIDI playback and WAV export use audiobus's polyphonic FM synthesizer. MIDI formats 0 and 1 are supported, including multiple tracks and tempo changes. Bar labels use 4/4 time. WAV export supports projects up to ten minutes long.
 
+## Live output in 3D
+
+Use the output selector beside **Notes** and **Velocity** to see the sound being played, including MIDI instruments, audio files and Vinyl processing. In VR, open **Menu** and press the output button to cycle modes. Switching modes keeps playback and the project intact; choose **Output off** to return to editing.
+
+| Mode | Spatial data |
+| --- | --- |
+| **Spectrum** | X is logarithmic frequency from 20 Hz to 20 kHz (or the audio's Nyquist limit), Y is spectral level, and Z is recent time. Paired dots separate left and right channels. |
+| **Rings** | Frequency wraps around each ring, spectral level changes its radius, and recent time stacks vertically. Left and right channels form separate nested traces. |
+| **Stereo scope** | Left waveform samples control X, right samples control Y, and recent time runs along Z. Correlated stereo forms a diagonal; differences between the channels open it into shapes. |
+
+The views retain up to 1.6 seconds of audio-clock history. Spectrum and ring colours show frequency; scope colours follow position within the waveform window. Point size and brightness show signal level. Silence creates no new visible points. The desktop camera switches to 3D for these views; drag or touch to orbit and zoom, and move naturally around them in VR. Switching output off restores the previous desktop camera mode.
+
 ## Virtual reality
 
 Open the app in a browser with WebXR support and choose **Enter VR**. The timeline stays in front of you, with a compact transport underneath it. Point at a note to select it, then hold and move it to change its time or pitch.

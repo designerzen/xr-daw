@@ -8,7 +8,7 @@ import { OfflineInstrument } from "./offline-instrument";
 type InstrumentOutput = Pick<
   OutputFM,
   "connect" | "configure" | "sendCommand" | "allNotesOff" | "destroy"
->;
+> & { flush?(): void };
 
 interface Part {
   output: InstrumentOutput;
@@ -129,6 +129,7 @@ export class ProjectInstrument {
         tickToSeconds(project, note.start + note.duration) - start,
       );
     }
+    for (const output of this.outputs.values()) output.flush?.();
   }
 
   silence() {
