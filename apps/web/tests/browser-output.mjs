@@ -22,13 +22,14 @@ export default async function run({ frame, page }) {
       ppq: 480,
       tempos: [{ tick: 0, bpm: 120 }],
       tracks: [{ id: "keys", name: "Keys", gain: 0.7, muted: false }],
-      notes: [60, 64, 67].map((pitch, i) => ({
+      // Repeated piano attacks keep real MIDI output audible throughout all modes.
+      notes: Array.from({ length: 360 }, (_, i) => ({
         id: `note-${i}`,
         trackId: "keys",
-        pitch,
+        pitch: [60, 64, 67][i % 3],
         velocity: 0.8,
-        start: 0,
-        duration: 24000,
+        start: Math.floor(i / 3) * 480,
+        duration: 480,
       })),
     };
     await frame.locator("#open").setInputFiles({
@@ -86,7 +87,7 @@ export default async function run({ frame, page }) {
             ...particles.userData,
             active,
             height,
-            ranges: max.map((value, axis) => value - min[axis]),
+            ranges: max.map((value, axis) => (active ? value - min[axis] : 0)),
             boardVisible: world.scene.getObjectByName("Sequencer view").visible,
           };
         }),
@@ -96,7 +97,16 @@ export default async function run({ frame, page }) {
         "Pause",
         "mode changes keep playback running",
       );
-      if (["chroma", "envelope", "waterfall"].includes(mode))
+      if (
+        [
+          "chroma",
+          "envelope",
+          "waterfall",
+          "knot",
+          "aurora",
+          "flight",
+        ].includes(mode)
+      )
         await page.screenshot({ path: `artifacts/output-${mode}.png` });
     }
     for (const mode of modes) {
@@ -110,13 +120,50 @@ export default async function run({ frame, page }) {
           mode.height > 0.001,
           "rectified peaks extend upward from the flat side",
         );
-      } else if (["spectrum", "rings", "scope"].includes(mode.mode))
+      } else if (
+        [
+          "spectrum",
+          "rings",
+          "scope",
+          "aurora",
+          "galaxy",
+          "knot",
+          "kaleidoscope",
+          "nebula",
+          "flight",
+        ].includes(mode.mode)
+      )
         assert.ok(
           mode.ranges.every((range) => range > 0.01),
           `${mode.mode} uses all three spatial axes`,
         );
       assert.equal(mode.boardVisible, false);
     }
+    const flight = await frame.evaluate(async () => {
+      const world = window.FRAMEWORK_MCP_RUNTIME.world;
+      const trace = world.scene.getObjectByName("Travelling waveform traces");
+      const mesh = world.scene.getObjectByName("Live output particles");
+      const before = mesh.instanceMatrix.array[14];
+      const camera = world.camera.position.toArray();
+      const clock = mesh.userData.clockTime;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return {
+        vertices: trace.geometry.drawRange.count,
+        moving:
+          mesh.userData.clockTime > clock &&
+          mesh.instanceMatrix.array[14] !== before,
+        cameraStill: world.camera.position
+          .toArray()
+          .every((value, i) => value === camera[i]),
+      };
+    });
+    assert.ok(flight.vertices > 100, "wave flight draws connected traces");
+    assert.equal(flight.moving, true);
+    assert.equal(
+      flight.cameraStill,
+      true,
+      "flight moves geometry, never the viewer",
+    );
     await frame.locator("#stop").click();
     // Real stereo FFT input verifies channel splitting and that output gain precedes analysis.
     const stereo = await frame.evaluate(async () => {
@@ -328,6 +375,7 @@ export default async function run({ frame, page }) {
       stereo,
       offlineRenders,
       simultaneous,
+      flight,
       audioSource: true,
       errors,
     };

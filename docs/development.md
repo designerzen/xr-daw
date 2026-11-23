@@ -68,6 +68,8 @@ The vinyl browser test enables the real AudioWorklet, checks program seeking and
 
 The output test also selects three audio scopes together, checks their shared history, source and separate stage positions, removes one without affecting the others, and clears the set while keeping the waveform visible. The XR test exercises additive scope selection and removal from the spatial transport.
 
+Artistic modes use `OutputFrame.clockTime` to animate between the 30 Hz analysis snapshots; `time` remains the snapshot timestamp, so animation never invents extra measurements. Aurora, galaxy, knot, kaleidoscope and nebula use additive particle materials. Wave flight occupies the full stage and advects captured stereo traces through depth, using a reused line-segment buffer as well as particles. Its bounds exclude the flying geometry from camera fitting, and it never moves the camera. The output test checks connected traces, moving geometry and a stationary camera, and saves artistic-mode screenshots under `apps/web/artifacts`.
+
 The XR entry check enters VR through the app button. For other SDK commands, run the CLI from the app workspace:
 
 ```sh

@@ -5,6 +5,7 @@ export const OUTPUT_FFT_SIZE = 4096;
 export const OUTPUT_METRICS = 5;
 export interface OutputFrame {
   time: number;
+  clockTime: number;
   left: Float32Array;
   right: Float32Array;
   leftWave: Float32Array;
@@ -21,6 +22,7 @@ export interface OutputFrame {
 export function createOutputFrame(time = 0): OutputFrame {
   return {
     time,
+    clockTime: time,
     left: new Float32Array(OUTPUT_BANDS),
     right: new Float32Array(OUTPUT_BANDS),
     leftWave: new Float32Array(OUTPUT_SAMPLES),
@@ -203,6 +205,7 @@ export class OutputAnalysis {
   }
 
   read(): OutputFrame {
+    this.frame.clockTime = this.context.currentTime;
     if (
       this.context.currentTime >= this.lastTime &&
       this.context.currentTime - this.lastTime < 1 / 30 - 1e-6

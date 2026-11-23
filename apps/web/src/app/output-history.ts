@@ -63,6 +63,30 @@ export const OUTPUT_MODES = {
     label: "Stereo dynamics trail",
     axes: "X: correlation −1 → +1 · Y: RMS · Z: history · Size: peak · Colour: crest factor",
   },
+  aurora: {
+    label: "Aurora",
+    axes: "Visual: flowing spectral curtains · Height and glow follow band energy",
+  },
+  galaxy: {
+    label: "Spiral galaxy",
+    axes: "Visual: rotating stereo spiral arms · Frequency sets radius · Energy sets glow",
+  },
+  knot: {
+    label: "Neon knot",
+    axes: "Visual: orbiting torus knot · Waveform bends the strands · Energy sets glow",
+  },
+  kaleidoscope: {
+    label: "Kaleidoscope",
+    axes: "Visual: mirrored waveform petals · Spectrum colours · History forms layered flowers",
+  },
+  nebula: {
+    label: "Nebula",
+    axes: "Visual: breathing particle shell · Spectral energy expands the surface",
+  },
+  flight: {
+    label: "Wave flight",
+    axes: "Travelling stereo waveforms · New traces start far away and fly through the screen",
+  },
 } as const;
 export type OutputMode = keyof typeof OUTPUT_MODES;
 export const HISTORY_ROWS = 48;
@@ -80,6 +104,7 @@ export class OutputHistory {
   private envelope = new Float32Array(HISTORY_ROWS * OUTPUT_SAMPLES);
   private delayed = new Float32Array(HISTORY_ROWS * OUTPUT_SAMPLES);
   private metrics = new Float32Array(HISTORY_ROWS * OUTPUT_METRICS);
+  private glow = new Float32Array(HISTORY_ROWS);
   private head = -1;
   private timestamps = new Float64Array(HISTORY_ROWS);
   private lastTime = -Infinity;
@@ -96,6 +121,7 @@ export class OutputHistory {
     this.envelope.fill(0);
     this.delayed.fill(0);
     this.metrics.fill(0);
+    this.glow.fill(0);
     this.head = -1;
     this.lastTime = -Infinity;
     this.frames = 0;
@@ -123,6 +149,10 @@ export class OutputHistory {
     this.envelope.set(frame.envelope, this.head * OUTPUT_SAMPLES);
     this.delayed.set(frame.delayed, this.head * OUTPUT_SAMPLES);
     this.metrics.set(frame.metrics, this.head * OUTPUT_METRICS);
+    this.glow[this.head] = Math.min(
+      1,
+      Math.log10(1 + frame.metrics[0] * 100) / 2,
+    );
     this.frames++;
     return true;
   }
@@ -133,9 +163,10 @@ export class OutputHistory {
     age: number,
     index: number,
     out: Float32Array,
+    now = this.lastTime,
   ) {
     const row = (this.head - age + HISTORY_ROWS) % HISTORY_ROWS;
-    const elapsed = Math.max(0, this.lastTime - this.timestamps[row]);
+    const elapsed = Math.max(0, now - this.timestamps[row]);
     const time = Math.min(1, elapsed / (HISTORY_ROWS / 30));
     const band = index % OUTPUT_BANDS,
       channel = Math.floor(index / OUTPUT_BANDS);
@@ -191,7 +222,61 @@ export class OutputHistory {
       out[0] = -1.55 + (index / (OUTPUT_SAMPLES - 1)) * 3.1;
       out[1] = 0.95;
       out[2] = -1.4 - time * 1.4;
-      if (mode === "waterfall") {
+      if (isVisualMode(mode)) {
+        // These are deliberately artistic mappings, rather than calibrated charts.
+        const phase = now * 0.35,
+          u = index / OUTPUT_SAMPLES;
+        const energy = Math.max(
+          this.levels[row * POINTS_PER_ROW + band],
+          this.levels[row * POINTS_PER_ROW + band + OUTPUT_BANDS],
+        );
+        strength = Math.max(energy * 0.7, this.glow[row]);
+        out[4] = (u * 0.8 + time * 0.3 + phase * 0.08) % 1;
+        if (mode === "aurora") {
+          const sweep = frequency * Math.PI * 2 + phase + time * 2;
+          out[0] = -1.5 + frequency * 3;
+          out[1] = 1 + energy * (0.5 + 0.5 * Math.sin(sweep)) + channel * 0.12;
+          out[2] = -2.1 + Math.cos(sweep) * 0.35 - time * 0.7;
+        } else if (mode === "galaxy") {
+          const angle =
+            frequency * Math.PI * 5 + phase + channel * Math.PI + time;
+          const radius = 0.08 + frequency * 1.25 + energy * 0.15;
+          out[0] = Math.cos(angle) * radius;
+          out[1] = 1.6 + Math.sin(angle) * radius * 0.48;
+          out[2] = -2.1 + (energy - 0.5) * 0.5 + (time - 0.5) * 0.8;
+        } else if (mode === "knot") {
+          const angle = u * Math.PI * 2,
+            spin = phase + time * 0.5;
+          const radius = 0.75 + 0.28 * Math.cos(3 * angle) + mid * 0.3;
+          out[0] = Math.cos(2 * angle + spin) * radius;
+          out[1] = 1.6 + Math.sin(3 * angle + spin) * (0.42 + side * 0.2);
+          out[2] = -2.1 + Math.sin(2 * angle + spin) * radius * 0.65;
+        } else if (mode === "kaleidoscope") {
+          const angle = u * Math.PI * 2 + phase * 0.25;
+          const radius =
+            0.2 +
+            Math.abs(Math.sin(u * Math.PI * 12)) * (0.65 + Math.abs(mid) * 0.5);
+          out[0] = Math.cos(angle) * radius;
+          out[1] = 1.6 + Math.sin(angle) * radius * 0.65;
+          out[2] = -1.4 - time * 1.4 + side * 0.25;
+        } else if (mode === "nebula") {
+          const latitude = 1 - (2 * (index + 0.5)) / OUTPUT_SAMPLES;
+          const angle =
+            index * Math.PI * (3 - Math.sqrt(5)) + phase + time * 0.6;
+          const radius = 0.5 + energy * 0.6 + this.metrics[m] * 0.3;
+          const ring = Math.sqrt(1 - latitude * latitude);
+          out[0] = Math.cos(angle) * ring * radius;
+          out[1] = 1.6 + latitude * radius * 0.65;
+          out[2] = -2.1 + Math.sin(angle) * ring * radius;
+        } else {
+          // A real stereo waveform, advected toward and past the viewing plane.
+          strength = Math.min(1, Math.hypot(l, r));
+          out[0] = -1.6 + u * 3.2;
+          out[1] = 1.6 + l * 0.85;
+          out[2] = -8 + time * 20 + r * 0.4;
+          out[4] = (u * 0.65 + time * 0.25) % 1;
+        }
+      } else if (mode === "waterfall") {
         strength = this.linear[offset];
         out[1] = 0.86;
         out[4] = (index / OUTPUT_SAMPLES) * 0.75;
@@ -251,6 +336,7 @@ export class OutputHistory {
       }
       out[5] = strength;
       out[3] = strength < 0.001 ? 0 : 0.006 + strength * 0.02;
+      if (isVisualMode(mode)) out[3] *= 1.4 * (1 - time * 0.8);
       if (mode === "centroid" || mode === "dynamics") out[3] *= 3;
     }
     if (
@@ -259,4 +345,15 @@ export class OutputHistory {
     )
       out[3] = 0;
   }
+}
+
+export function isVisualMode(mode: OutputMode) {
+  return (
+    mode === "aurora" ||
+    mode === "galaxy" ||
+    mode === "knot" ||
+    mode === "kaleidoscope" ||
+    mode === "nebula" ||
+    mode === "flight"
+  );
 }

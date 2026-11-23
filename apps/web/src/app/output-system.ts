@@ -11,7 +11,11 @@ import {
   MeshBasicMaterial,
   PlaneGeometry,
   DoubleSide,
-  type BufferGeometry,
+  BufferGeometry,
+  BufferAttribute,
+  LineSegments,
+  LineBasicMaterial,
+  AdditiveBlending,
   Sprite,
   SpriteMaterial,
 } from "@iwsdk/core";
@@ -21,6 +25,7 @@ import {
   HISTORY_ROWS,
   POINTS_PER_ROW,
   type OutputMode,
+  isVisualMode,
 } from "./output-history";
 import type { Session } from "./session";
 
@@ -59,6 +64,8 @@ class OutputPanel {
   private matrix = new Matrix4();
   private color = new Color();
   private point = new Float32Array(6);
+  private trails?: LineSegments<BufferGeometry, LineBasicMaterial>;
+  private previousPoint = new Float32Array(4);
 
   constructor(readonly mode: Exclude<OutputMode, "off">) {
     this.root.name = `Output view ${mode}`;
@@ -82,6 +89,8 @@ class OutputPanel {
     this.configure(mode);
   }
   dispose() {
+    this.trails?.geometry.dispose();
+    this.trails?.material.dispose();
     this.particles.dispose();
     this.pointGeometry.dispose();
     this.floorGeometry.dispose();
@@ -103,6 +112,42 @@ class OutputPanel {
     this.floor.position.y = mode === "floor" ? 0.015 : 0.855;
     this.bounds.position.y = mode === "floor" ? 0.72 : 1.6;
     this.label.position.y = mode === "floor" ? 1.6 : 2.48;
+    if (isVisualMode(mode)) {
+      Object.assign(this.particles.material, {
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+        blending: AdditiveBlending,
+      });
+      this.bounds.material.opacity = mode === "flight" ? 0 : 0.06;
+    }
+    if (mode === "flight") {
+      const geometry = new BufferGeometry();
+      const length = HISTORY_ROWS * (POINTS_PER_ROW - 1) * 6;
+      geometry.setAttribute(
+        "position",
+        new BufferAttribute(new Float32Array(length), 3),
+      );
+      geometry.setAttribute(
+        "color",
+        new BufferAttribute(new Float32Array(length), 3),
+      );
+      this.trails = new LineSegments(
+        geometry,
+        new LineBasicMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.65,
+          blending: AdditiveBlending,
+          depthWrite: false,
+        }),
+      );
+      this.trails.name = "Travelling waveform traces";
+      this.trails.frustumCulled = false;
+      this.trails.userData.fitIgnore = true;
+      this.trails.raycast = () => {};
+      this.root.add(this.trails);
+    }
     const canvas = this.texture.image as HTMLCanvasElement;
     canvas.width = 2048;
     canvas.height = 220;
@@ -129,7 +174,12 @@ class OutputPanel {
     );
     this.texture.needsUpdate = true;
   }
-  render(history: OutputHistory, source: string, primary: boolean) {
+  render(
+    history: OutputHistory,
+    source: string,
+    primary: boolean,
+    now: number,
+  ) {
     const mode = this.mode,
       columns = isColumns(mode);
     this.particles.name = primary
@@ -137,9 +187,12 @@ class OutputPanel {
       : `Live output particles ${mode}`;
     let peak = 0;
     const points = pointsPerRow(mode);
+    let segments = 0;
+    const positions = this.trails?.geometry.getAttribute("position");
+    const colours = this.trails?.geometry.getAttribute("color");
     for (let age = 0; age < HISTORY_ROWS; age++) {
       for (let index = 0; index < points; index++) {
-        history.point(mode, age, index, this.point);
+        history.point(mode, age, index, this.point, now);
         const [x, y, z, size, hue, level] = this.point;
         if (columns) {
           // Geometry is anchored at y=0, so every column has an exactly flat underside.
@@ -155,15 +208,42 @@ class OutputPanel {
         this.particles.setMatrixAt(instance, this.matrix);
         this.color.setHSL(hue, 0.8, 0.3 + level * 0.4);
         this.particles.setColorAt(instance, this.color);
+        if (positions && colours) {
+          if (index > 0 && size > 0 && this.previousPoint[3] > 0) {
+            positions.setXYZ(
+              segments * 2,
+              this.previousPoint[0],
+              this.previousPoint[1],
+              this.previousPoint[2],
+            );
+            positions.setXYZ(segments * 2 + 1, x, y, z);
+            const fade = Math.min(1, size / 0.02);
+            for (let vertex = 0; vertex < 2; vertex++)
+              colours.setXYZ(
+                segments * 2 + vertex,
+                this.color.r * fade,
+                this.color.g * fade,
+                this.color.b * fade,
+              );
+            segments++;
+          }
+          for (let axis = 0; axis < 4; axis++)
+            this.previousPoint[axis] = this.point[axis];
+        }
         peak = Math.max(peak, level);
       }
     }
     this.particles.instanceMatrix.needsUpdate = true;
     this.particles.instanceColor!.needsUpdate = true;
+    if (positions && colours && this.trails) {
+      positions.needsUpdate = colours.needsUpdate = true;
+      this.trails.geometry.setDrawRange(0, segments * 2);
+    }
     Object.assign(this.particles.userData, {
       mode,
       source,
       frames: history.frames,
+      clockTime: now,
       peak,
     });
   }
@@ -225,7 +305,12 @@ export function outputSystem(session: Session) {
             this.panels.delete(mode);
           }
         });
-        modes.forEach((mode, index) => {
+        let tileIndex = 0;
+        const columns = Math.min(
+          4,
+          modes.filter((mode) => mode !== "flight").length,
+        );
+        modes.forEach((mode) => {
           let panel = this.panels.get(mode);
           if (!panel) {
             panel = new OutputPanel(mode);
@@ -233,8 +318,9 @@ export function outputSystem(session: Session) {
             this.root.add(panel.root);
           }
           // Audio retains its full-size interactive waveform in front of the scope wall.
-          const tiled = source === "audio" || modes.length > 1;
-          const columns = Math.min(4, modes.length);
+          const tiled =
+            mode !== "flight" && (source === "audio" || modes.length > 1);
+          const index = mode === "flight" ? 0 : tileIndex++;
           const scale = tiled ? 0.48 : 1;
           panel.root.scale.setScalar(scale);
           panel.root.position.set(
@@ -250,10 +336,12 @@ export function outputSystem(session: Session) {
           ? session.clipPlayer.readOutput()
           : session.audio.readOutput();
       const captured = frame ? this.history.capture(frame) : false;
-      if (!changed && !captured) return;
-      modes.forEach((mode, index) =>
-        this.panels.get(mode)!.render(this.history, source, index === 0),
-      );
+      modes.forEach((mode, index) => {
+        if (changed || captured || isVisualMode(mode))
+          this.panels
+            .get(mode)!
+            .render(this.history, source, index === 0, frame?.clockTime ?? 0);
+      });
     }
   };
 }

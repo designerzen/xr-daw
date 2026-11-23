@@ -81,6 +81,14 @@ Dropping an audio file shows **Spectrum** alongside its waveform by default when
 | **Stereo waveform ribbon** | Sample time runs along X; left and right amplitudes bend the trace in Y and Z. Older traces move deeper into the scene. |
 | **Spectral trajectory** | A trail maps power-weighted spectral centroid to X, RMS amplitude to Y and spectral spread to Z. Size shows peak amplitude and colour shows age. |
 | **Stereo dynamics trail** | Stereo correlation occupies X (−1 opposite phase, +1 in phase), RMS amplitude occupies Y, and time occupies Z. Size shows peak amplitude; colour shows crest factor from 0 to 24 dB. |
+| **Aurora** | Glowing spectral curtains ripple and twist in depth, with band energy shaping their height and brightness. |
+| **Spiral galaxy** | Two rotating stereo arms curl around a common centre. Frequency sets radius; spectral energy and RMS illuminate the particles. |
+| **Neon knot** | A luminous torus knot rotates through space. The stereo waveform bends its intertwined strands. |
+| **Kaleidoscope** | Waveform petals form rotating, mirrored flowers, with older layers extending into depth. |
+| **Nebula** | A rotating particle shell breathes with RMS and spectral energy. |
+| **Wave flight** | Connected stereo waveform traces stream from the distance toward and past the screen, fading as they age. This mode occupies the full stage, including alongside other selected scopes. The waveform remains available for scratching, and the camera stays under your control. |
+
+Aurora, Spiral galaxy, Neon knot, Kaleidoscope and Nebula are artistic audio-reactive displays. Their rotation, symmetry and colour motion are decorative rather than calibrated measurements. They use additive glow and audio-clock animation, and fade away when the signal goes silent. Wave flight preserves each captured stereo trace while moving it through depth; it moves the geometry rather than the camera, including in VR.
 
 The stereo analyser reads a 4096-sample FFT and waveform window at up to 30 frames per audio second, without spectral smoothing. Frequency resolution is sample rate / 4096 (about 11.7 Hz at 48 kHz). Spectral levels use a fixed −90 to −6 dB display range; waveform amplitudes remain on a fixed full-scale basis, preserving dynamics. Short scopes retain 128 consecutive native samples; the envelope and RMS measurements use the full window. Centroid and spread use linear spectral power, and stereo balance uses independent channel power.
 

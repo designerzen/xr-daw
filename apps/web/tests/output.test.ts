@@ -10,7 +10,11 @@ import {
   waveformFeatures,
   OUTPUT_FFT_SIZE,
 } from "../src/app/output-analysis";
-import { OutputHistory, OUTPUT_MODES } from "../src/app/output-history";
+import {
+  OutputHistory,
+  OUTPUT_MODES,
+  isVisualMode,
+} from "../src/app/output-history";
 
 const frame = (time: number): OutputFrame => ({
   ...createOutputFrame(time),
@@ -19,6 +23,61 @@ const frame = (time: number): OutputFrame => ({
   right: new Float32Array(OUTPUT_BANDS).fill(0.3),
   leftWave: new Float32Array(OUTPUT_SAMPLES).fill(0.2),
   rightWave: new Float32Array(OUTPUT_SAMPLES).fill(-0.4),
+});
+
+test("wave flight advects unchanged stereo samples through the screen on the audio clock", () => {
+  const h = new OutputHistory(),
+    p = new Float32Array(6),
+    f = frame(1);
+  h.capture(f);
+  h.point("flight", 0, 20, p, 1);
+  const start = [...p];
+  h.point("flight", 0, 20, p, 1.8);
+  assert.ok(
+    p[2] > start[2] + 9,
+    "the same recorded trace moves toward the viewer",
+  );
+  assert.equal(p[0], start[0]);
+  assert.equal(p[1], start[1]);
+  assert.ok(p[3] < start[3], "older traces fade");
+  assert.equal(
+    h.frames,
+    1,
+    "animation does not create fake analysis snapshots",
+  );
+  h.point("flight", 0, 20, p, 2.61);
+  assert.equal(
+    p[3],
+    0,
+    "expired traces are removed after passing the viewing plane",
+  );
+});
+
+test("artistic views animate reproducibly and respond to measured energy", () => {
+  const h = new OutputHistory(),
+    p = new Float32Array(6),
+    f = frame(1);
+  f.metrics[0] = 0.2;
+  h.capture(f);
+  for (const mode of Object.keys(
+    OUTPUT_MODES,
+  ) as (keyof typeof OUTPUT_MODES)[]) {
+    if (!isVisualMode(mode) || mode === "flight") continue;
+    h.point(mode, 0, 17, p, 1);
+    const first = [...p];
+    h.point(mode, 0, 17, p, 1);
+    assert.deepEqual(
+      [...p],
+      first,
+      `${mode} has no random frame-dependent jitter`,
+    );
+    h.point(mode, 0, 17, p, 1.2);
+    assert.ok(
+      p.slice(0, 3).some((value, i) => value !== first[i]),
+      `${mode} flows between analysis snapshots`,
+    );
+    assert.ok([...p].every(Number.isFinite));
+  }
 });
 
 test("FFT features identify pitch class, power balance, centroid and spread", () => {
