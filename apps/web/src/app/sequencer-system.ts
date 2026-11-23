@@ -199,6 +199,9 @@ export function sequencerSystem(session: Session) {
         "view-velocity": () => session.setView("velocity"),
         "view-waveform": () => session.setView("waveform"),
         "output-mode": () => session.cycleOutputMode(),
+        "output-choice": () => session.cycleOutputChoice(),
+        "output-toggle": () => session.toggleOutputMode(session.outputChoice),
+        "output-clear": () => session.setOutputMode("off"),
         vinyl: () => {
           if (session.view !== "waveform" || session.clipPlayer.vinylBusy)
             return;
@@ -675,7 +678,24 @@ export function sequencerSystem(session: Session) {
         this.world
           .requireSceneObject<UIKitMLAsset>("transport")
           .requireElementById("output-label")
-          .setProperties({ text: OUTPUT_MODES[session.outputMode].label });
+          .setProperties({
+            text:
+              session.outputModes.length > 1
+                ? `${session.outputModes.length} visualisers`
+                : OUTPUT_MODES[session.outputMode].label,
+          });
+        const outputPanel =
+          this.world.requireSceneObject<UIKitMLAsset>("transport");
+        outputPanel
+          .requireElementById("output-choice-label")
+          .setProperties({ text: OUTPUT_MODES[session.outputChoice].label });
+        outputPanel
+          .requireElementById("output-toggle-label")
+          .setProperties({
+            text: session.outputModes.includes(session.outputChoice)
+              ? "Remove"
+              : "Add",
+          });
         this.viewPivot.rotation.x =
           session.view === "velocity" ? -Math.PI / 2 : 0;
         const panel = this.world.requireSceneObject<UIKitMLAsset>("transport");

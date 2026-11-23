@@ -3,6 +3,35 @@ import { test } from "node:test";
 import { ALL_TRACKS, Session } from "../src/app/session";
 import { demoProject } from "../src/app/project";
 
+test("visualisers can be added, removed, cleared and browsed without altering playback or source view", () => {
+  const session = new Session(demoProject());
+  session.view = "waveform";
+  session.clipPlayer.playing = true;
+  session.toggleOutputMode("spectrum");
+  session.toggleOutputMode("scope");
+  assert.deepEqual(session.outputModes, ["spectrum", "scope"]);
+  session.cycleOutputChoice();
+  assert.deepEqual(
+    session.outputModes,
+    ["spectrum", "scope"],
+    "browsing does not replace existing views",
+  );
+  session.toggleOutputMode("spectrum");
+  assert.deepEqual(session.outputModes, ["scope"]);
+  assert.equal(session.outputMode, "scope");
+  session.setOutputMode("rings");
+  assert.deepEqual(
+    session.outputModes,
+    ["rings"],
+    "single-view selector replaces the set",
+  );
+  session.setOutputMode("off");
+  assert.deepEqual(session.outputModes, []);
+  assert.equal(session.view, "waveform");
+  assert.equal(session.clipPlayer.playing, true);
+  session.dispose();
+});
+
 test("the full song is reachable and manual navigation suspends playback following", () => {
   const project = demoProject();
   project.notes[0].start = 480 * 80;

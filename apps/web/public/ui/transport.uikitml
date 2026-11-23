@@ -24,6 +24,11 @@
   </div>
   <div id="advanced" class="options" style="display: none">
     <div class="row"><Button id="output-mode"><ButtonLabel id="output-label">Output off</ButtonLabel></Button></div>
+    <div class="row">
+      <Button id="output-choice"><ButtonLabel id="output-choice-label">Spectrum</ButtonLabel></Button>
+      <Button id="output-toggle"><ButtonLabel id="output-toggle-label">Add</ButtonLabel></Button>
+      <Button id="output-clear"><ButtonLabel>Clear scopes</ButtonLabel></Button>
+    </div>
     <div id="vinyl-options" class="row" style="display: none">
       <Button id="vinyl"><ButtonLabel>Vinyl</ButtonLabel></Button>
       <Button id="condition"><ButtonLabel id="condition-label">Worn</ButtonLabel></Button>

@@ -33,9 +33,29 @@ export class Session {
   trackId: string;
   allTracks = true;
   view: "notes" | "velocity" | "waveform" = "notes";
-  outputMode: OutputMode = "off";
+  outputModes: Exclude<OutputMode, "off">[] = [];
+  outputChoice: Exclude<OutputMode, "off"> = "spectrum";
+  get outputMode(): OutputMode {
+    return this.outputModes[0] ?? "off";
+  }
   setOutputMode(mode: OutputMode) {
-    this.outputMode = mode;
+    this.outputModes = mode === "off" ? [] : [mode];
+    if (mode !== "off") this.outputChoice = mode;
+    this.emit();
+  }
+  toggleOutputMode(mode: Exclude<OutputMode, "off">) {
+    this.outputModes = this.outputModes.includes(mode)
+      ? this.outputModes.filter((value) => value !== mode)
+      : [...this.outputModes, mode];
+    this.outputChoice = mode;
+    this.emit();
+  }
+  cycleOutputChoice() {
+    const modes = (Object.keys(OUTPUT_MODES) as OutputMode[]).filter(
+      (mode): mode is Exclude<OutputMode, "off"> => mode !== "off",
+    );
+    this.outputChoice =
+      modes[(modes.indexOf(this.outputChoice) + 1) % modes.length];
     this.emit();
   }
   cycleOutputMode() {
@@ -103,6 +123,10 @@ export class Session {
     this.pause();
     this.clipPlayer.load(clip);
     this.view = "waveform";
+    if (!this.outputModes.length) {
+      this.outputModes = ["spectrum"];
+      this.outputChoice = "spectrum";
+    }
     this.store.select(null);
     this.emit();
   }

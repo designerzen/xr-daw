@@ -28,7 +28,16 @@ export default async function run({ frame }) {
     }, view);
   }
   // Cycle the same live output modes from the spatial transport menu.
-  for (const mode of ["spectrum", "rings", "scope", "floor", "off"]) {
+  await frame.evaluate(() =>
+    window.FRAMEWORK_MCP_RUNTIME.world
+      .requireSceneObject("transport")
+      .requireElementById("output-clear")
+      .dispatchEvent({ type: "click" }),
+  );
+  const modes = await frame
+    .locator("#output-mode option")
+    .evaluateAll((options) => options.map((option) => option.value));
+  for (const mode of [...modes.slice(1), "off"]) {
     await frame.evaluate(() =>
       window.FRAMEWORK_MCP_RUNTIME.world
         .requireSceneObject("transport")
@@ -53,6 +62,37 @@ export default async function run({ frame }) {
       !!window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName(
         "Waveform circles channel 1",
       ),
+  );
+  // Browsing choices leaves existing scopes in place; Add/Remove changes the set.
+  const clickScope = async (id) =>
+    frame.evaluate(
+      (id) =>
+        window.FRAMEWORK_MCP_RUNTIME.world
+          .requireSceneObject("transport")
+          .requireElementById(id)
+          .dispatchEvent({ type: "click" }),
+      id,
+    );
+  await clickScope("output-choice");
+  await clickScope("output-toggle");
+  await clickScope("output-choice");
+  await clickScope("output-toggle");
+  await frame.waitForFunction(
+    () =>
+      window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName("Live output")
+        .children.length === 2,
+  );
+  await clickScope("output-toggle");
+  await frame.waitForFunction(
+    () =>
+      window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName("Live output")
+        .children.length === 1,
+  );
+  await clickScope("output-clear");
+  await frame.waitForFunction(
+    () =>
+      !window.FRAMEWORK_MCP_RUNTIME.world.scene.getObjectByName("Live output")
+        .visible,
   );
   if (waveformAvailable) {
     await frame.evaluate(() =>

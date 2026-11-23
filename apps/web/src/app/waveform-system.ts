@@ -241,7 +241,7 @@ export function waveformSystem(session: Session) {
       );
     }
     update() {
-      const visible = session.view === "waveform" && session.outputMode === "off";
+      const visible = session.view === "waveform";
       if (this.clip !== session.clipPlayer.clip) {
         this.clip = session.clipPlayer.clip;
         if (this.clip) this.build(this.clip);

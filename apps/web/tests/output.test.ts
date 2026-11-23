@@ -5,15 +5,100 @@ import {
   OUTPUT_BANDS,
   OUTPUT_SAMPLES,
   type OutputFrame,
+  createOutputFrame,
+  spectralFeatures,
+  waveformFeatures,
+  OUTPUT_FFT_SIZE,
 } from "../src/app/output-analysis";
-import { OutputHistory } from "../src/app/output-history";
+import { OutputHistory, OUTPUT_MODES } from "../src/app/output-history";
 
 const frame = (time: number): OutputFrame => ({
+  ...createOutputFrame(time),
   time,
   left: new Float32Array(OUTPUT_BANDS).fill(0.6),
   right: new Float32Array(OUTPUT_BANDS).fill(0.3),
   leftWave: new Float32Array(OUTPUT_SAMPLES).fill(0.2),
   rightWave: new Float32Array(OUTPUT_SAMPLES).fill(-0.4),
+});
+
+test("FFT features identify pitch class, power balance, centroid and spread", () => {
+  const l = new Float32Array(2048).fill(-Infinity),
+    r = l.slice(),
+    f = createOutputFrame();
+  // A4 exactly on bin 40 at this sample rate.
+  l[40] = -6;
+  r[40] = -12;
+  spectralFeatures(l, r, 45056, f);
+  assert.equal(f.chroma.indexOf(Math.max(...f.chroma)), 9);
+  assert.ok(Math.abs(f.metrics[2] * 22528 - 440) < 0.01);
+  assert.ok(f.metrics[3] < 1e-6);
+  const pan = f.balance.find((value) => value !== 0)!;
+  assert.ok(
+    Math.abs(pan - (10 ** -1.2 - 10 ** -0.6) / (10 ** -1.2 + 10 ** -0.6)) <
+      1e-6,
+  );
+  r[400] = -6;
+  spectralFeatures(l, r, 45056, f);
+  assert.ok(f.metrics[2] * 22528 > 1000);
+  assert.ok(f.metrics[3] > 0.01);
+  l.fill(-Infinity);
+  r.fill(-Infinity);
+  spectralFeatures(l, r, 45056, f);
+  for (const data of [f.linear, f.chroma, f.balance])
+    assert.ok(data.every((value) => value === 0));
+  assert.equal(f.metrics[2], 0);
+  assert.equal(f.metrics[3], 0);
+});
+
+test("full-window waveform metrics retain polarity, correlation, peaks and native delay", () => {
+  const l = Float32Array.from(
+    { length: OUTPUT_FFT_SIZE },
+    (_, i) => Math.sin((i * 2 * Math.PI) / 64) * 0.5,
+  );
+  const r = l.map((value) => -value),
+    f = createOutputFrame();
+  waveformFeatures(l, r, f);
+  assert.ok(Math.abs(f.metrics[0] - 0.5 / Math.sqrt(2)) < 1e-6);
+  assert.equal(f.metrics[1], 0.5);
+  assert.equal(f.metrics[4], -1);
+  assert.ok(f.envelope.every((value) => value === 0.5));
+  assert.ok(
+    f.delayed.every((value) => value === 0),
+    "anti-phase stereo has zero mid",
+  );
+  waveformFeatures(l, l, f);
+  assert.equal(f.metrics[4], 1);
+  assert.equal(f.delayed[20], l[l.length - OUTPUT_SAMPLES + 20 - 32]);
+  l.fill(0);
+  waveformFeatures(l, l, f);
+  assert.ok(f.metrics.every((value) => value === 0));
+});
+
+test("all modes produce finite bounded geometry and suppress silence and empty history", () => {
+  const h = new OutputHistory(),
+    p = new Float32Array(6),
+    f = createOutputFrame(1);
+  h.capture(f);
+  for (const mode of Object.keys(OUTPUT_MODES)) {
+    if (mode === "off") continue;
+    for (let i = 0; i < OUTPUT_SAMPLES; i++) {
+      h.point(mode as Exclude<keyof typeof OUTPUT_MODES, "off">, 0, i, p);
+      assert.ok([...p].every(Number.isFinite), mode);
+      assert.equal(p[3], 0, `${mode} silence`);
+    }
+  }
+  f.balance.fill(1);
+  f.left.fill(0.5);
+  f.right.fill(0.5);
+  f.metrics.set([0.25, 0.5, 0.2, 0.3, -1]);
+  f.time = 1.1;
+  h.capture(f);
+  h.point("balance", 0, 20, p);
+  assert.ok(p[2] > -2.1);
+  h.point("centroid", 0, 0, p);
+  assert.ok(Math.abs(p[0] - (-1.55 + 0.2 * 3.1)) < 1e-6);
+  h.point("dynamics", 0, 0, p);
+  assert.equal(p[0], -1.5);
 });
 
 test("logarithmic analyser bands retain known frequencies and silence", () => {

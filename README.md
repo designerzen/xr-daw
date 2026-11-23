@@ -63,14 +63,28 @@ MIDI playback and WAV export use audiobus's polyphonic FM synthesizer. MIDI form
 
 Use the output selector beside **Notes** and **Velocity** to see the sound being played, including MIDI instruments, audio files and Vinyl processing. In VR, open **Menu** and press the output button to cycle modes. Switching modes keeps playback and the project intact; choose **Output off** to return to editing.
 
+Dropping an audio file shows **Spectrum** alongside its waveform by default when no visualisers are selected. Open **Visualisers** beside **Waveform** to select one or several scopes; existing selections are kept when another audio file is loaded. Each selection adds a labelled 3D display to a grid above and behind the waveform. The waveform stays interactive for seeking and scratching while the scopes show the processed audio output. Untick a scope to remove it, or choose **Clear visualisers** to leave only the waveform. Every scope shares the same stereo analyser and audio-clock history. In VR, use the scope choice button to browse, **Add** / **Remove** to toggle that scope, and **Clear scopes** to remove the set; the existing output button still switches to a single view.
+
 | Mode | Spatial data |
 | --- | --- |
 | **Spectrum** | X is logarithmic frequency from 20 Hz to 20 kHz (or the audio's Nyquist limit), Y is spectral level, and Z is recent time. Paired dots separate left and right channels. |
 | **Rings** | Frequency wraps around each ring, spectral level changes its radius, and recent time stacks vertically. Left and right channels form separate nested traces. |
 | **Stereo scope** | Left waveform samples control X, right samples control Y, and recent time runs along Z. Correlated stereo forms a diagonal; differences between the channels open it into shapes. |
 | **Floor scope** | A waveform with a flat underside on the floor. Positive and negative excursions both become upward peaks using the greater of `abs(left)` and `abs(right)`, so opposite-phase stereo cannot cancel. X runs through the waveform window; depth shows recent history. |
+| **FFT waterfall** | Columns map linear frequency from zero to Nyquist across X, spectral level to height, and recent time to depth. Useful for seeing the spacing of harmonics. |
+| **Stereo frequency field** | Log frequency runs across X, spectral level controls Y, and the power balance of each band moves it between left and right along Z. Colour shows age. |
+| **Pitch-class tower** | Twelve spokes run from C to B around a tower. Radius shows energy folded across octaves into each pitch class, and height shows time. This is a coarse spectral view, not a note detector. |
+| **Spectral attacks** | Columns show positive changes in log-band dB level between analysis frames. Frequency runs across X and history along Z, separating attacks from sustained sound. |
+| **Mid / side tunnel** | Side signal `(L − R) / 2` controls X, mid signal `(L + R) / 2` controls Y, and history runs along Z. Mono audio collapses to the centre; opposite-phase material spreads sideways. |
+| **Delay phase space** | Mid amplitude now, mid amplitude 32 native samples earlier, and side amplitude occupy X, Y and Z. Colour shows age. Delay in seconds depends on the audio sample rate. |
+| **Envelope terrain** | Each column retains the largest absolute sample in a section of the full FFT waveform window. X spans that window, height shows amplitude, and depth shows history. Transients survive the reduced display resolution. |
+| **Stereo waveform ribbon** | Sample time runs along X; left and right amplitudes bend the trace in Y and Z. Older traces move deeper into the scene. |
+| **Spectral trajectory** | A trail maps power-weighted spectral centroid to X, RMS amplitude to Y and spectral spread to Z. Size shows peak amplitude and colour shows age. |
+| **Stereo dynamics trail** | Stereo correlation occupies X (−1 opposite phase, +1 in phase), RMS amplitude occupies Y, and time occupies Z. Size shows peak amplitude; colour shows crest factor from 0 to 24 dB. |
 
-The views retain up to 1.6 seconds of audio-clock history. Spectrum and ring colours show frequency; scope colours follow position within the waveform window. Point size and brightness show signal level. Silence creates no new visible points. The desktop camera switches to 3D for these views; drag or touch to orbit and zoom, and move naturally around them in VR. Switching output off restores the previous desktop camera mode.
+The stereo analyser reads a 4096-sample FFT and waveform window at up to 30 frames per audio second, without spectral smoothing. Frequency resolution is sample rate / 4096 (about 11.7 Hz at 48 kHz). Spectral levels use a fixed −90 to −6 dB display range; waveform amplitudes remain on a fixed full-scale basis, preserving dynamics. Short scopes retain 128 consecutive native samples; the envelope and RMS measurements use the full window. Centroid and spread use linear spectral power, and stereo balance uses independent channel power.
+
+The views retain up to 1.6 seconds of audio-clock history. Spectrum and ring colours show frequency; scope colours follow position within the waveform window unless stated otherwise above. Point size and brightness show signal level. Silence creates no new visible points. A steady mono signal can form a line or a stationary cluster: the axes show the measured signal rather than artificial motion. The desktop camera switches to 3D for these views; drag or touch to orbit and zoom, and move naturally around them in VR. Switching output off restores the previous desktop camera mode.
 
 ## Virtual reality
 

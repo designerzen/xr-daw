@@ -95,6 +95,19 @@ root.innerHTML = `
     )
       .map(([id, mode]) => `<option value="${id}">${mode.label}</option>`)
       .join("")}</select>
+    <details id="visualisers-menu" class="menu visualisers-menu">
+      <summary id="visualisers-summary">Visualisers</summary>
+      <div class="menu-panel" aria-label="Audio visualisers">
+        ${Object.entries(OUTPUT_MODES)
+          .filter(([id]) => id !== "off")
+          .map(
+            ([id, mode]) =>
+              `<label><input type="checkbox" data-output-mode="${id}" />${mode.label}</label>`,
+          )
+          .join("")}
+        <button id="output-clear" type="button">Clear visualisers</button>
+      </div>
+    </details>
   </nav>
   <nav class="scene-tools" aria-label="Scene navigation">
     <select id="camera-mode" aria-label="Camera" title="Camera: 3D perspective, or flat and oblique views that keep every bar and pitch the same size">${Object.entries(
@@ -286,7 +299,7 @@ async function start() {
       localStorage.getItem("xr-daw.camera");
   } catch {}
   let lastView = session.view;
-  let lastOutput = session.outputMode;
+  let lastOutput = session.outputModes.join(",");
   let editorCamera: CameraMode = navigation.mode;
   world.registerSystem(sequencerSystem(session));
   world.registerSystem(waveformSystem(session));
@@ -299,12 +312,24 @@ async function start() {
   function sync() {
     const waveform = session.view === "waveform";
     element<HTMLSelectElement>("output-mode").value = session.outputMode;
-    if (session.outputMode !== lastOutput) {
-      if (lastOutput === "off") {
+    element("visualisers-menu").hidden = !waveform;
+    element<HTMLSelectElement>("output-mode").hidden = waveform;
+    element("visualisers-summary").textContent =
+      `Visualisers${session.outputModes.length ? ` (${session.outputModes.length})` : ""}`;
+    root
+      .querySelectorAll<HTMLInputElement>("[data-output-mode]")
+      .forEach((checkbox) => {
+        checkbox.checked = session.outputModes.includes(
+          checkbox.dataset.outputMode as Exclude<OutputMode, "off">,
+        );
+      });
+    const outputKey = session.outputModes.join(",");
+    if (outputKey !== lastOutput) {
+      if (!lastOutput && outputKey) {
         editorCamera = navigation.mode;
         setCameraMode("perspective");
-      } else if (session.outputMode === "off") setCameraMode(editorCamera);
-      lastOutput = session.outputMode;
+      } else if (!outputKey) setCameraMode(editorCamera);
+      lastOutput = outputKey;
       navigation.fit();
     }
     if (session.view !== lastView) {
@@ -549,6 +574,15 @@ async function start() {
     session.setOutputMode(
       element<HTMLSelectElement>("output-mode").value as OutputMode,
     );
+  root
+    .querySelectorAll<HTMLInputElement>("[data-output-mode]")
+    .forEach((checkbox) => {
+      checkbox.onchange = () =>
+        session.toggleOutputMode(
+          checkbox.dataset.outputMode as Exclude<OutputMode, "off">,
+        );
+    });
+  handle("output-clear", () => session.setOutputMode("off"));
   handle("previous", () => session.page(-1));
   handle("next", () => session.page(1));
   handle("follow", () => session.toggleFollow());

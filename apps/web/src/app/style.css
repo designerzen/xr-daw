@@ -280,6 +280,27 @@ summary::-webkit-details-marker {
   border-top: 1px solid #ffffff10;
   margin: 5px auto;
 }
+.visualisers-menu > summary {
+  padding: 8px 12px;
+  font-size: 12px;
+  border-radius: 18px;
+  white-space: nowrap;
+}
+.visualisers-menu {
+  flex-shrink: 0;
+}
+.view-navigation:has(.visualisers-menu[open]) {
+  z-index: 9;
+}
+.visualisers-menu .menu-panel {
+  top: 42px;
+  right: 0;
+  max-height: min(65vh, 530px);
+  overflow-y: auto;
+}
+.visualisers-menu input {
+  accent-color: #a3d2c5;
+}
 .shortcut-hint {
   font-size: 10px;
   color: #8190a5;

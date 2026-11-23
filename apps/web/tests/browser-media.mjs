@@ -130,6 +130,21 @@ export default async function run({ frame, page, workspaceRoot }) {
     geometry[0].high,
     "FFT colors differ for 220 Hz and 4 kHz",
   );
+  await frame.locator("#visualisers-summary").click();
+  assert.equal(
+    await frame.locator('[data-output-mode="spectrum"]').isChecked(),
+    true,
+    "dropped audio shows Spectrum by default",
+  );
+  await frame.locator('[data-output-mode="scope"]').check();
+  await frame.locator("#visualisers-summary").click();
+  await frame.waitForFunction(() => {
+    const scene = window.FRAMEWORK_MCP_RUNTIME.world.scene;
+    return (
+      scene.getObjectByName("Live output").children.length === 2 &&
+      scene.getObjectByName("Waveform seek surface").visible
+    );
+  });
   const canvas = frame.locator("#scene-container canvas");
   const point = (fraction) =>
     frame.evaluate((fraction) => {
