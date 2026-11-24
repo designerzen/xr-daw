@@ -198,6 +198,8 @@ pnpm run build
 
 Upload the contents of `apps/web/dist` to a static host. The build supports hosting under a project subpath.
 
+For Cloudflare Pages, keep the root directory at the repository root and use `pnpm run build` as the build command. The root `wrangler.toml` sets the build output directory to `apps/web/dist`. If configuring the output directory in the dashboard, use `apps/web/dist` rather than `dist`.
+
 GitHub Actions runs tests and builds the application when commits are pushed to `main`, then deploys the output to GitHub Pages. To use this in a fork, enable **GitHub Actions** as the Pages source in the repository settings.
 
 ## How it works
