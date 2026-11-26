@@ -1,3 +1,4 @@
+import { barAt, tickAtBar } from "./meter";
 /** Musical data is independent of the renderer and the audio graph. All times are ticks. */
 export interface Note {
   id: string;
@@ -12,6 +13,12 @@ export interface Track {
   name: string;
   gain: number;
   muted: boolean;
+  solo?: boolean;
+  /** Zero-based General MIDI program; absent in older projects means piano. */
+  program?: number;
+  drums?: boolean;
+  /** Original zero-based MIDI channel; export remaps when independent parts conflict. */
+  channel?: number;
 }
 export interface Tempo {
   tick: number;
@@ -24,6 +31,37 @@ export interface Project {
   tempos: Tempo[];
   tracks: Track[];
   notes: Note[];
+  loopRegion?: { start: number; end: number };
+  timeSignatures?: TimeSignature[];
+  sustain?: ValueEvent[];
+  /** Signed MIDI wheel values: -8192 through 8191, with a two-semitone range. */
+  pitchBends?: ValueEvent[];
+  programChanges?: ProgramChange[];
+}
+export interface TimeSignature {
+  tick: number;
+  numerator: number;
+  denominator: number;
+  metronome?: number;
+  thirtyseconds?: number;
+}
+export interface ValueEvent {
+  trackId: string;
+  tick: number;
+  value: number;
+}
+export interface ProgramChange {
+  trackId: string;
+  tick: number;
+  program: number;
+}
+
+export function trackAudible(project: Project, track: Track): boolean {
+  return !track.muted && (!project.tracks.some((t) => t.solo) || !!track.solo);
+}
+
+export function trackHue(index: number): number {
+  return (index * 0.618 + 0.55) % 1;
 }
 
 export function demoProject(): Project {
@@ -48,11 +86,23 @@ export function demoProject(): Project {
 }
 
 export function projectEnd(project: Project): number {
+  const expressionEnd = Math.max(
+    0,
+    ...[project.sustain, project.pitchBends, project.programChanges].map(
+      (events) => events?.at(-1)?.tick ?? 0,
+    ),
+    project.timeSignatures?.at(-1)?.tick ?? 0,
+  );
   const end = project.notes.reduce(
     (end, n) => Math.max(end, n.start + n.duration),
-    project.ppq * 4,
+    Math.max(
+      tickAtBar(project, 1),
+      project.loopRegion?.end ?? 0,
+      expressionEnd,
+    ),
   );
-  return Math.ceil(end / (project.ppq * 4)) * project.ppq * 4;
+  const bar = barAt(project, end);
+  return Math.abs(bar.start - end) < 1e-7 ? end : bar.end;
 }
 
 export function tickToSeconds(project: Project, tick: number): number {
@@ -117,12 +167,82 @@ export function validateProject(value: unknown): Project {
       !finite(t.gain) ||
       t.gain < 0 ||
       t.gain > 1 ||
-      typeof t.muted !== "boolean"
+      typeof t.muted !== "boolean" ||
+      (t.solo !== undefined && typeof t.solo !== "boolean") ||
+      (t.drums !== undefined && typeof t.drums !== "boolean") ||
+      (t.channel !== undefined &&
+        (!Number.isInteger(t.channel) || t.channel < 0 || t.channel > 15)) ||
+      (t.program !== undefined &&
+        (!Number.isInteger(t.program) || t.program < 0 || t.program > 127))
     )
       throw new Error("Invalid track.");
     tracks.add(t.id);
   }
   const ids = new Set<string>();
+  if (p.timeSignatures !== undefined) {
+    if (
+      !Array.isArray(p.timeSignatures) ||
+      !p.timeSignatures.length ||
+      p.timeSignatures.length > 10000
+    )
+      throw new Error("Invalid time signature map.");
+    p.timeSignatures.forEach((s, i) => {
+      if (
+        !s ||
+        !finite(s.tick) ||
+        (i ? s.tick <= p.timeSignatures![i - 1].tick : s.tick !== 0) ||
+        !Number.isInteger(s.numerator) ||
+        s.numerator < 1 ||
+        s.numerator > 255 ||
+        !Number.isInteger(s.denominator) ||
+        s.denominator < 1 ||
+        s.denominator > 128 ||
+        (s.denominator & (s.denominator - 1)) !== 0 ||
+        s.thirtyseconds === 0 ||
+        [s.metronome, s.thirtyseconds].some(
+          (v) => v !== undefined && (!Number.isInteger(v) || v < 0 || v > 255),
+        )
+      )
+        throw new Error("Invalid time signature.");
+    });
+  }
+  for (const [key, min, max] of [
+    ["sustain", 0, 127],
+    ["pitchBends", -8192, 8191],
+    ["programChanges", 0, 127],
+  ] as const) {
+    const events = p[key];
+    if (events === undefined) continue;
+    if (!Array.isArray(events) || events.length > 100000)
+      throw new Error("Invalid expression events.");
+    events.forEach((event, i) => {
+      if (!event) throw new Error(`Invalid ${key} event.`);
+      const value =
+        key === "programChanges"
+          ? (event as ProgramChange).program
+          : (event as ValueEvent).value;
+      if (
+        !event ||
+        !tracks.has(event.trackId) ||
+        !finite(event.tick) ||
+        event.tick < 0 ||
+        (i > 0 && event.tick < events[i - 1].tick) ||
+        !Number.isInteger(value) ||
+        value < min ||
+        value > max
+      )
+        throw new Error(`Invalid ${key} event.`);
+    });
+  }
+  if (
+    p.loopRegion !== undefined &&
+    (!p.loopRegion ||
+      !finite(p.loopRegion.start) ||
+      !finite(p.loopRegion.end) ||
+      p.loopRegion.start < 0 ||
+      p.loopRegion.end <= p.loopRegion.start)
+  )
+    throw new Error("Invalid loop region.");
   for (const n of p.notes) {
     if (
       !n ||

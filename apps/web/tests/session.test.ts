@@ -3,6 +3,54 @@ import { test } from "node:test";
 import { ALL_TRACKS, Session } from "../src/app/session";
 import { demoProject } from "../src/app/project";
 
+test("track panel actions retain all-track visibility and create undoable sound and mixer changes", () => {
+  const session = new Session(demoProject());
+  try {
+    session.addTrack();
+    const id = session.trackId;
+    assert.equal(session.store.project.tracks.length, 2);
+    assert.equal(session.allTracks, true);
+    session.updateTrack(id, {
+      name: "Bass",
+      program: 32,
+      solo: true,
+      gain: 0.5,
+    });
+    assert.equal(session.track?.name, "Bass");
+    session.store.undo();
+    assert.equal(session.track?.program, 0);
+    session.activateTrack("track-1");
+    assert.equal(session.trackId, "track-1");
+    assert.equal(session.allTracks, true);
+  } finally {
+    session.dispose();
+  }
+});
+
+test("loop selection and loop view set saved boundaries and survive undo", () => {
+  const session = new Session(demoProject());
+  try {
+    session.store.selectMany(["note-1", "note-2"]);
+    session.loopSelection();
+    assert.deepEqual(session.store.project.loopRegion, { start: 0, end: 960 });
+    assert.equal(session.audio.loop, true);
+    session.store.undo();
+    assert.equal(session.store.project.loopRegion, undefined);
+    session.loopView();
+    assert.deepEqual(session.store.project.loopRegion, {
+      start: 0,
+      end: session.pageSize,
+    });
+    const revision = session.store.revision;
+    session.setLoopRegion(480, 0);
+    assert.equal(session.store.revision, revision);
+    session.setLoop(false);
+    assert.equal(session.audio.loop, false);
+  } finally {
+    session.dispose();
+  }
+});
+
 test("visualisers can be added, removed, cleared and browsed without altering playback or source view", () => {
   const session = new Session(demoProject());
   session.view = "waveform";

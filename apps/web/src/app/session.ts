@@ -7,7 +7,9 @@ import {
   snapTick,
   type Note,
   type Project,
+  type Track,
 } from "./project";
+import { barAt, beatTick, tickAtBar } from "./meter";
 
 export const ALL_TRACKS = "*";
 const MIN_PITCH_ROWS = 24;
@@ -88,6 +90,16 @@ export class Session {
         this.trackId = selected.trackId;
       if (this.revision !== this.store.revision) {
         this.revision = this.store.revision;
+        const project = this.store.project;
+        if (this.timeline === "pages")
+          this.pageTick =
+            this.viewSpan === "song"
+              ? 0
+              : tickAtBar(
+                  project,
+                  Math.min(this.pageIndex, this.lastPageIndex) * this.viewSpan,
+                );
+        if (!this.track) this.trackId = project.tracks[0]?.id ?? "";
         if (this.audio.playing)
           void this.audio
             .play(this.store.project, this.audio.positionTick)
@@ -131,9 +143,32 @@ export class Session {
     this.emit();
   }
   get pageSize() {
+    const project = this.store.project;
+    if (this.viewSpan === "song") return projectEnd(project);
+    const first =
+      this.timeline === "scroll"
+        ? barAt(project, this.audio.positionTick).index
+        : this.pageIndex * this.viewSpan;
+    return (
+      tickAtBar(project, first + this.viewSpan) - tickAtBar(project, first)
+    );
+  }
+  get totalBars() {
+    return (
+      barAt(this.store.project, projectEnd(this.store.project) - 1e-6).index + 1
+    );
+  }
+  get pageIndex() {
     return this.viewSpan === "song"
-      ? projectEnd(this.store.project)
-      : this.store.project.ppq * this.viewSpan * 4;
+      ? 0
+      : Math.floor(
+          barAt(this.store.project, this.pageTick).index / this.viewSpan,
+        );
+  }
+  get lastPageIndex() {
+    return this.viewSpan === "song"
+      ? 0
+      : Math.max(0, Math.ceil(this.totalBars / this.viewSpan) - 1);
   }
   /** First tick on screen. In scroll mode it trails the playhead by half a view, within the song. */
   get viewStart() {
@@ -156,7 +191,15 @@ export class Session {
         projectEnd(this.store.project) - 1,
         this.audio.positionTick,
       );
-      this.pageTick = Math.floor(tick / this.pageSize) * this.pageSize;
+      this.pageTick =
+        this.viewSpan === "song"
+          ? 0
+          : tickAtBar(
+              this.store.project,
+              Math.floor(
+                barAt(this.store.project, tick).index / this.viewSpan,
+              ) * this.viewSpan,
+            );
     }
     this.emit();
   }
@@ -173,13 +216,16 @@ export class Session {
   async playFromView() {
     if (this.view === "waveform") await this.clipPlayer.play(0);
     else if (this.timeline === "scroll")
-      await this.audio.play(this.store.project, this.audio.positionTick);
-    else await this.audio.play(this.store.project, this.pageTick);
+      await this.audio.play(this.store.project, this.audio.positionTick, true);
+    else await this.audio.play(this.store.project, this.pageTick, true);
     this.emit();
   }
   setViewSpan(span: 4 | 16 | "song") {
     this.viewSpan = span;
-    this.pageTick = Math.floor(this.pageTick / this.pageSize) * this.pageSize;
+    this.pageTick =
+      span === "song"
+        ? 0
+        : tickAtBar(this.store.project, this.pageIndex * span);
     this.fitPitch();
     this.emit();
   }
@@ -254,18 +300,16 @@ export class Session {
       void this.seekTo(
         this.audio.positionTick + (direction * this.pageSize) / 4,
       ).catch(this.onError);
-    else this.goToPage(this.pageTick / this.pageSize + direction);
+    else this.goToPage(this.pageIndex + direction);
   }
   goToPage(index: number) {
     if (this.view === "waveform") return;
     if (!Number.isFinite(index)) return;
-    const finalPage =
-      Math.floor((projectEnd(this.store.project) - 1) / this.pageSize) *
-      this.pageSize;
-    this.pageTick = Math.max(
-      0,
-      Math.min(finalPage, Math.round(index) * this.pageSize),
-    );
+    const page = Math.max(0, Math.min(this.lastPageIndex, Math.round(index)));
+    this.pageTick =
+      this.viewSpan === "song"
+        ? 0
+        : tickAtBar(this.store.project, page * this.viewSpan);
     this.followPlayback = false;
     this.fitPitch();
     this.emit();
@@ -287,7 +331,14 @@ export class Session {
       projectEnd(this.store.project) - 1,
       this.audio.positionTick,
     );
-    const page = Math.floor(tick / this.pageSize) * this.pageSize;
+    const page =
+      this.viewSpan === "song"
+        ? 0
+        : tickAtBar(
+            this.store.project,
+            Math.floor(barAt(this.store.project, tick).index / this.viewSpan) *
+              this.viewSpan,
+          );
     if (page === this.pageTick) return;
     this.pageTick = page;
     this.fitPitch();
@@ -308,7 +359,7 @@ export class Session {
     } else if (this.audio.playing) this.audio.pause();
     else {
       this.followPlayback = true;
-      await this.audio.play(this.store.project);
+      await this.audio.play(this.store.project, undefined, true);
       this.followPlayhead();
     }
     this.emit();
@@ -318,6 +369,100 @@ export class Session {
     this.clipPlayer.stop();
     this.followPlayback = true;
     this.emit();
+  }
+  setLoop(enabled: boolean) {
+    const tick = this.audio.positionTick;
+    this.audio.loop = enabled;
+    this.clipPlayer.loop = enabled;
+    if (this.audio.playing)
+      void this.audio.play(this.store.project, tick).catch(this.onError);
+    this.emit();
+  }
+  setLoopRegion(start: number, end: number) {
+    if (
+      !Number.isFinite(start) ||
+      !Number.isFinite(end) ||
+      start < 0 ||
+      end <= start
+    )
+      return;
+    const revision = this.store.revision;
+    this.audio.loop = true;
+    this.clipPlayer.loop = true;
+    this.store.edit((p) => {
+      p.loopRegion = { start, end };
+    });
+    if (revision === this.store.revision && this.audio.playing)
+      void this.audio
+        .play(this.store.project, this.audio.positionTick)
+        .catch(this.onError);
+    this.emit();
+  }
+  loopSelection() {
+    const notes = this.store.selectedNotes;
+    if (!notes.length) return;
+    const project = this.store.project;
+    this.setLoopRegion(
+      beatTick(project, Math.min(...notes.map((n) => n.start)), "floor"),
+      beatTick(
+        project,
+        Math.max(...notes.map((n) => n.start + n.duration)),
+        "ceil",
+      ),
+    );
+  }
+  loopView() {
+    this.setLoopRegion(this.viewStart, this.viewStart + this.pageSize);
+  }
+  updateTrack(
+    id: string,
+    change: Partial<
+      Pick<Track, "name" | "gain" | "muted" | "solo" | "program" | "drums">
+    >,
+  ) {
+    this.store.edit((p) => {
+      const track = p.tracks.find((t) => t.id === id);
+      if (track) Object.assign(track, change);
+      if (change.program !== undefined && p.programChanges)
+        p.programChanges = p.programChanges.filter((e) => e.trackId !== id);
+    });
+  }
+  setTimeSignature(
+    numerator: number,
+    denominator: number,
+    tick = this.audio.positionTick,
+  ) {
+    const start = barAt(this.store.project, tick).start;
+    this.store.edit((p) => {
+      const existing = p.timeSignatures ?? [
+        { tick: 0, numerator: 4, denominator: 4 },
+      ];
+      p.timeSignatures = [
+        ...existing.filter((s) => s.tick !== start),
+        { tick: start, numerator, denominator },
+      ].sort((a, b) => a.tick - b.tick);
+    });
+  }
+  activateTrack(id: string) {
+    if (!this.store.project.tracks.some((t) => t.id === id)) return;
+    this.store.select(null);
+    this.trackId = id;
+    if (!this.allTracks) this.fitPitch();
+    this.emit();
+  }
+  addTrack() {
+    if (this.store.project.tracks.length >= 256) return;
+    const id = crypto.randomUUID();
+    this.store.edit((p) =>
+      p.tracks.push({
+        id,
+        name: `Track ${p.tracks.length + 1}`,
+        gain: 0.7,
+        muted: false,
+        program: 0,
+      }),
+    );
+    this.activateTrack(id);
   }
   setTool(tool: EditTool) {
     this.tool = tool;

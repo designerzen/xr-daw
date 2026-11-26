@@ -57,7 +57,9 @@ export default async function run({ frame, page, workspaceRoot }) {
       const source = create.call(this);
       const start = source.start.bind(source);
       source.start = (...args) => {
-        window.__mediaSources.push({ source, offset: args[1] });
+        // ClipPlayer always supplies a seek offset; procedural UI-noise sources do not.
+        if (typeof args[1] === "number")
+          window.__mediaSources.push({ source, offset: args[1] });
         return start(...args);
       };
       return source;

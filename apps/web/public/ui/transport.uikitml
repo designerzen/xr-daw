@@ -23,6 +23,30 @@
     <Button id="exit"><ButtonLabel>Exit</ButtonLabel></Button>
   </div>
   <div id="advanced" class="options" style="display: none">
+    <div class="row">
+      <Button id="feedback-enabled"><ButtonLabel id="feedback-label">UI sounds</ButtonLabel></Button>
+      <Button id="feedback-quieter"><ButtonLabel>UI quieter</ButtonLabel></Button>
+      <Button id="feedback-louder"><ButtonLabel>UI louder</ButtonLabel></Button>
+    </div>
+    <div id="composition-options" class="options">
+      <div class="row"><Button id="meter"><ButtonLabel id="meter-label">Meter 4/4</ButtonLabel></Button><ButtonLabel>At current bar</ButtonLabel></div>
+      <div class="row">
+        <Button id="loop"><ButtonLabel>Loop</ButtonLabel></Button>
+        <Button id="loop-view"><ButtonLabel>Loop view</ButtonLabel></Button>
+        <Button id="loop-selection"><ButtonLabel>Loop selection</ButtonLabel></Button>
+        <Button id="metronome"><ButtonLabel>Click</ButtonLabel></Button>
+        <Button id="count-in"><ButtonLabel>Count-in</ButtonLabel></Button>
+      </div>
+      <div class="row"><ButtonLabel id="track-name-label">Keys</ButtonLabel></div>
+      <div class="row">
+        <Button id="track-mute"><ButtonLabel>Mute</ButtonLabel></Button>
+        <Button id="track-solo"><ButtonLabel>Solo</ButtonLabel></Button>
+        <Button id="track-drums"><ButtonLabel>Drums</ButtonLabel></Button>
+        <Button id="track-quieter"><ButtonLabel>Level -</ButtonLabel></Button>
+        <Button id="track-louder"><ButtonLabel>Level +</ButtonLabel></Button>
+      </div>
+      <div class="row"><Button id="track-sound"><ButtonLabel id="track-sound-label">Acoustic Grand Piano</ButtonLabel></Button></div>
+    </div>
     <div class="row"><Button id="output-mode"><ButtonLabel id="output-label">Output off</ButtonLabel></Button></div>
     <div class="row">
       <Button id="output-choice"><ButtonLabel id="output-choice-label">Spectrum</ButtonLabel></Button>

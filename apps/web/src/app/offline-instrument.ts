@@ -2,7 +2,7 @@ import registerFMProcessor from "audiobus/instruments/fm/processor.js";
 import { FM_GENERAL_MIDI_PRESETS } from "audiobus/instruments/fm/presets.ts";
 import { loadCaptureWorklet } from "audiobus/io/inputs/load-capture-worklet.ts";
 import type { IAudioCommand } from "audiobus/commands/audio-command-interface.ts";
-import { NOTE_ON } from "audiobus/commands/commands.ts";
+import { NOTE_ON, PITCH_BEND } from "audiobus/commands/commands.ts";
 
 /** OutputFM resumes live contexts. Offline rendering must start without calling resume().
  * Use its same processor, patch and message protocol, with the host owning rendering.
@@ -11,6 +11,7 @@ export class OfflineInstrument {
   private node?: AudioWorkletNode;
   private messages: Record<string, unknown>[] = [];
   readonly output: GainNode;
+  private preset = 0;
 
   constructor(
     private context: BaseAudioContext,
@@ -22,8 +23,15 @@ export class OfflineInstrument {
     this.output.connect(mixer);
   }
 
-  configure({ volume }: { volume: number }) {
+  configure({
+    volume = this.output.gain.value,
+    preset = this.preset,
+  }: {
+    volume?: number;
+    preset?: number;
+  }) {
     this.output.gain.value = volume;
+    this.preset = preset;
   }
 
   async connect() {
@@ -59,13 +67,25 @@ export class OfflineInstrument {
   }
 
   async sendCommand(command: IAudioCommand) {
+    if (command.type === PITCH_BEND) {
+      this.messages.push({
+        type: "bend",
+        part: command.channel - 1,
+        value: (((command.value ?? 8192) - 8192) / 8192) * 2,
+        time: command.audioTime,
+      });
+      return;
+    }
     this.messages.push({
       type: command.type === NOTE_ON && command.velocity > 0 ? "on" : "off",
       part: command.channel - 1,
       note: command.number,
       velocity: command.velocity / 127,
       time: command.audioTime,
-      patch: command.type === NOTE_ON ? FM_GENERAL_MIDI_PRESETS[0] : undefined,
+      patch:
+        command.type === NOTE_ON
+          ? FM_GENERAL_MIDI_PRESETS[this.preset]
+          : undefined,
     });
   }
 

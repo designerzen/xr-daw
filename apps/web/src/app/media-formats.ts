@@ -7,7 +7,7 @@ import type { IAudioCommand } from "audiobus/commands/audio-command-interface.ts
 import AudioCommand from "audiobus/commands/audio-command.ts";
 import AudioEvent from "audiobus/models/audio-event.ts";
 import { NOTE_ON, NOTE_OFF } from "audiobus/commands/commands.ts";
-import { importMidi, exportMidi } from "./midi";
+import { importMidi, exportMidi, importRiffMidi, exportRiffMidi } from "./midi";
 import {
   validateProject,
   tickToSeconds,
@@ -132,6 +132,11 @@ export async function importMediaFile(
     };
   }
   const name = file.name.replace(/(?:\.tone)?\.[^.]+$/i, "");
+  if (detected.format.id === "rmid")
+    return {
+      kind: "project",
+      project: importRiffMidi(new Uint8Array(await file.arrayBuffer()), name),
+    };
   if (detected.format.id === "midi")
     return {
       kind: "project",
@@ -217,6 +222,7 @@ export async function exportNotes(
   if (!project.notes.length)
     throw new Error("Add some notes before exporting.");
   if (format === "midi") return exportMidi(project);
+  if (format === "rmid") return exportRiffMidi(project);
   const recording = projectRecording(project),
     timer = { BPM: project.tempos[0].bpm };
   switch (format) {

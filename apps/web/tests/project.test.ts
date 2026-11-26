@@ -12,7 +12,46 @@ import {
   snapTick,
   tickToSeconds,
   validateProject,
+  trackAudible,
 } from "../src/app/project";
+
+test("track sounds, solo and loop regions round-trip, undo and reject malformed settings", () => {
+  const store = new ProjectStore();
+  store.edit((p) => {
+    Object.assign(p.tracks[0], { program: 88, solo: true, drums: true });
+    p.loopRegion = { start: 480, end: 1920 };
+  });
+  const saved = validateProject(JSON.parse(JSON.stringify(store.project)));
+  assert.equal(saved.tracks[0].program, 88);
+  assert.equal(saved.tracks[0].drums, true);
+  assert.deepEqual(saved.loopRegion, { start: 480, end: 1920 });
+  const other = { id: "other", name: "Other", gain: 1, muted: false };
+  assert.equal(trackAudible(saved, other), false);
+  assert.equal(trackAudible(saved, saved.tracks[0]), true);
+  assert.equal(trackAudible(saved, { ...saved.tracks[0], muted: true }), false);
+  store.undo();
+  assert.equal(store.project.loopRegion, undefined);
+  assert.equal(store.project.tracks[0].program, undefined);
+  store.redo();
+  assert.deepEqual(store.project, saved);
+  for (const program of [-1, 128, 0.5, NaN])
+    assert.throws(() =>
+      validateProject({ ...saved, tracks: [{ ...saved.tracks[0], program }] }),
+    );
+  for (const loopRegion of [
+    null,
+    { start: -1, end: 480 },
+    { start: 480, end: 480 },
+    { start: 0, end: Infinity },
+  ])
+    assert.throws(() => validateProject({ ...saved, loopRegion }));
+  assert.throws(() =>
+    validateProject({
+      ...saved,
+      tracks: [{ ...saved.tracks[0], drums: "yes" }],
+    }),
+  );
+});
 
 test("tempo conversion integrates changes and inverts seconds without drift", () => {
   const project = demoProject();

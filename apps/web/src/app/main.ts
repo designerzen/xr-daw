@@ -30,6 +30,13 @@ import {
   type CameraMode,
 } from "./scene-navigation";
 import "./style.css";
+import { TrackPanel } from "./track-panel";
+import {
+  interactionFeedback as feedback,
+  type FeedbackCue,
+} from "./interaction-feedback";
+import { installInteractionSounds } from "./interaction-sounds";
+import { barAt, barPosition, beatTick, nextBeatTick, tickAtBar } from "./meter";
 
 function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
@@ -37,6 +44,7 @@ function download(blob: Blob, name: string) {
   link.href = url;
   link.download = name;
   link.click();
+  feedback.play("success");
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
@@ -133,6 +141,11 @@ root.innerHTML = `
         `<option value="${division}">${division ? `1/${division * 4}` : "Off"}</option>`,
     ).join("")}</select>
   </nav>
+  <details id="track-panel" class="track-panel" open>
+    <summary>Tracks</summary>
+    <div class="track-panel-actions"><button id="show-all-tracks" type="button">Show all</button><button id="add-track" type="button">+ Track</button></div>
+    <div id="track-rows"></div>
+  </details>
   <nav id="timeline-navigation" class="timeline-navigation" aria-label="Timeline">
     <select id="timeline-span" aria-label="Visible timeline" title="Visible timeline"><option value="4">4 bars</option><option value="16">16 bars</option><option value="song">Song</option></select>
     ${iconButton("previous", "Previous four bars", "previous")}
@@ -141,18 +154,37 @@ root.innerHTML = `
     <output id="timeline-range" aria-live="polite"></output>
     <button id="follow" aria-pressed="true" title="Follow playback through the song">Follow</button>
     <button id="timeline-scroll" aria-pressed="false" title="Scroll: keep the playhead centred and move the music past it">Scroll</button>
+    <details id="loop-menu" class="menu loop-menu">
+      <summary>Loop</summary>
+      <div class="menu-panel">
+        <label><input id="region-loop" type="checkbox" /> Enable loop</label>
+        <p class="shortcut-hint">Drag across the ruler to loop a phrase. Bar ends are exclusive.</p>
+        <div id="loop-ruler" aria-label="Drag to set loop region"><span id="loop-band"></span></div>
+        <div class="loop-bars"><label>Start bar <input id="loop-start" type="number" min="1" step="any" value="1" /></label><label>End bar <input id="loop-end" type="number" min="1" step="any" value="5" /></label></div>
+        <output id="loop-description"></output>
+        <div class="menu-row"><button id="loop-view">Loop view</button><button id="loop-selection">Loop selection</button></div>
+        <button id="loop-clear">Use whole song</button>
+        <label><input id="metronome" type="checkbox" /> Metronome</label>
+        <label><input id="count-in" type="checkbox" /> One-bar count-in</label>
+      </div>
+    </details>
   </nav>
   <section class="transport" aria-label="Transport">
     ${iconButton("play", "Play", "play", "primary")}${iconButton("stop", "Stop", "stop")}
     <span class="divider"></span>
     <select id="track" aria-label="Track" title="Track"></select>
     <label class="tempo"><input id="tempo" type="number" min="20" max="300" step="1" aria-label="Tempo" /><span>BPM</span></label>
+    <output id="meter-label" aria-label="Current time signature">4/4</output>
     <label id="vinyl-control" class="vinyl-control" hidden><input id="vinyl-enabled" type="checkbox" /> Vinyl</label>
     <details id="edit-menu" class="menu edit-menu">
       <summary aria-label="Editing options" title="Editing options">${icon("settings")}</summary>
       <div class="menu-panel">
         <div class="menu-row"><label><input id="loop" type="checkbox" /> Loop</label><label><input id="mute" type="checkbox" /> Mute</label></div>
         <label>Gain <input id="gain" type="range" min="0" max="1" step="0.01" /></label><hr />
+        <label class="meter-editor">Meter <input id="meter-numerator" type="number" min="1" max="255" step="1" aria-label="Beats per bar" /><span>/</span><select id="meter-denominator" aria-label="Beat unit">${[1, 2, 4, 8, 16, 32, 64, 128].map((value) => `<option value="${value}">${value}</option>`).join("")}</select></label>
+        <button id="set-meter" title="Set the time signature at the start of the playhead's bar">Set meter at current bar</button><hr />
+        <label><input id="feedback-enabled" type="checkbox" checked /> Interaction sounds</label>
+        <label>Feedback level <input id="feedback-volume" type="range" min="0" max="1" step="0.01" aria-label="Interaction sound volume" /></label><hr />
         <label id="vinyl-condition-control" hidden>Condition <select id="vinyl-condition" aria-label="Vinyl condition"><option value="clean">Clean</option><option value="worn">Worn</option><option value="damaged">Damaged</option></select></label>
         <button id="seek">Play from this page</button><hr />
         <div class="menu-row"><button id="undo">Undo</button><button id="redo">Redo</button></div>
@@ -185,11 +217,14 @@ const status = (message: string) => {
 };
 const report = (error: unknown) => {
   console.error(error);
+  feedback.play("error");
   status(error instanceof Error ? error.message : String(error));
   element("status").classList.add("visible");
 };
+feedback.mount();
+const removeInteractionSounds = installInteractionSounds(root);
 
-const menus = [...root.querySelectorAll<HTMLDetailsElement>("details")];
+const menus = [...root.querySelectorAll<HTMLDetailsElement>("details.menu")];
 const closeMenus = () =>
   menus.forEach((menu) => {
     menu.open = false;
@@ -197,12 +232,15 @@ const closeMenus = () =>
 document.addEventListener(
   "pointerdown",
   (event) => {
-    if (!(event.target as HTMLElement).closest("details")) closeMenus();
+    if (!(event.target as HTMLElement).closest("details.menu")) closeMenus();
   },
   true,
 );
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeMenus();
+  if (event.key === "Escape") {
+    if (menus.some((menu) => menu.open)) feedback.play("close");
+    closeMenus();
+  }
 });
 menus.forEach((menu) =>
   menu.addEventListener("toggle", () => {
@@ -240,6 +278,7 @@ async function start() {
     };
     const tools = visible(".scene-tools");
     const editing = visible(".edit-tools");
+    const tracks = visible(".track-panel[open]");
     return {
       top:
         Math.max(
@@ -258,7 +297,13 @@ async function start() {
         ) +
         8,
       right: tools ? bounds.right - tools.left + 8 : 16,
-      left: editing ? editing.right - bounds.left + 8 : 16,
+      left:
+        Math.max(
+          editing?.right ?? bounds.left + 8,
+          tracks?.right ?? bounds.left + 8,
+        ) -
+        bounds.left +
+        8,
     };
   };
   const navigation = new SceneNavigation(
@@ -308,6 +353,9 @@ async function start() {
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let trackKey = "";
   let destroyed = false;
+  const trackPanel = new TrackPanel(element("track-rows"), session);
+  element<HTMLDetailsElement>("track-panel").open = window.innerWidth > 760;
+  element("track-panel").addEventListener("toggle", () => navigation.fit());
 
   function sync() {
     const waveform = session.view === "waveform";
@@ -352,6 +400,50 @@ async function start() {
         String(session.view === view),
       );
     const project = session.store.project;
+    element("track-panel").hidden = waveform;
+    if (!waveform) trackPanel.sync();
+    const meter = barAt(project, session.audio.positionTick);
+    element("meter-label").textContent =
+      `${meter.numerator}/${meter.denominator}`;
+    element("meter-label").hidden = waveform;
+    element("set-meter").hidden = waveform;
+    element("meter-numerator").closest<HTMLElement>("label")!.hidden = waveform;
+    if (document.activeElement !== input("meter-numerator"))
+      input("meter-numerator").value = String(meter.numerator);
+    if (document.activeElement !== element("meter-denominator"))
+      element<HTMLSelectElement>("meter-denominator").value = String(
+        meter.denominator,
+      );
+    const region = project.loopRegion ?? { start: 0, end: projectEnd(project) };
+    input("loop").checked = waveform
+      ? session.clipPlayer.loop
+      : session.audio.loop;
+    input("region-loop").checked = session.audio.loop;
+    input("metronome").checked = session.audio.metronome;
+    input("count-in").checked = session.audio.countIn;
+    input("feedback-enabled").checked = !feedback.muted;
+    input("feedback-volume").value = String(feedback.volume);
+    if (document.activeElement !== input("loop-start"))
+      input("loop-start").value = String(
+        1 + barPosition(project, region.start),
+      );
+    if (document.activeElement !== input("loop-end"))
+      input("loop-end").value = String(1 + barPosition(project, region.end));
+    element("loop-description").textContent = project.loopRegion
+      ? `Bars ${(1 + barPosition(project, region.start)).toFixed(2)}–${(1 + barPosition(project, region.end)).toFixed(2)}`
+      : "Whole song";
+    const rulerStart = session.viewStart;
+    const left = Math.max(
+      0,
+      Math.min(1, (region.start - rulerStart) / session.pageSize),
+    );
+    const right = Math.max(
+      0,
+      Math.min(1, (region.end - rulerStart) / session.pageSize),
+    );
+    element("loop-band").style.left = `${left * 100}%`;
+    element("loop-band").style.width = `${Math.max(0, right - left) * 100}%`;
+    button("loop-selection").disabled = !session.store.selectedNotes.length;
     element("timeline-navigation").hidden = waveform;
     element<HTMLSelectElement>("timeline-span").value = String(
       session.viewSpan,
@@ -478,25 +570,27 @@ async function start() {
   function updateTimeline() {
     const project = session.store.project;
     const end = projectEnd(project);
-    const bar = project.ppq * 4;
-    const totalBars = end / bar;
+    const totalBars = session.totalBars;
     const slider = input("timeline-page");
     if (session.timeline === "scroll") {
       const tick = Math.min(end - 1, session.audio.positionTick);
       slider.step = String(project.ppq);
       slider.max = String(end - 1);
       if (!scrubbing) slider.value = String(tick);
-      const current = Math.floor(tick / bar) + 1;
+      const current = barAt(project, tick).index + 1;
       element("timeline-range").textContent = `${current} / ${totalBars}`;
       slider.setAttribute("aria-label", "Song position");
       slider.setAttribute("aria-valuetext", `Bar ${current} of ${totalBars}`);
       return;
     }
     slider.step = "1";
-    slider.max = String(Math.floor((end - 1) / session.pageSize));
-    slider.value = String(session.pageTick / session.pageSize);
-    const firstBar = session.pageTick / bar + 1;
-    const lastBar = Math.min(firstBar + session.pageSize / bar - 1, totalBars);
+    slider.max = String(session.lastPageIndex);
+    slider.value = String(session.pageIndex);
+    const firstBar = barAt(project, session.pageTick).index + 1;
+    const lastBar = Math.min(
+      barAt(project, session.pageTick + session.pageSize - 1e-6).index + 1,
+      totalBars,
+    );
     element("timeline-range").textContent =
       `${firstBar}–${lastBar} / ${totalBars}`;
     slider.setAttribute("aria-label", "Timeline page");
@@ -506,6 +600,7 @@ async function start() {
     );
   }
   const unsubscribe = session.subscribe(sync);
+  const unsubscribeFeedback = feedback.subscribe(() => session.emit());
   sync();
   const handle = (id: string, action: () => void | Promise<void>) => {
     button(id).onclick = () => {
@@ -550,6 +645,10 @@ async function start() {
     .catch(() => {});
   const visibilityCleanup = world.visibilityState.subscribe((value) => {
     const immersive = value !== VisibilityState.NonImmersive;
+    if (immersive && requestingXR) {
+      requestingXR = false;
+      feedback.play("success");
+    }
     navigation.setImmersive(immersive);
     root.classList.toggle("immersive", immersive);
     button("enter-vr").textContent = immersive ? "Exit VR" : "Enter VR";
@@ -675,11 +774,124 @@ async function start() {
   };
   handle("audition", async () => {
     if (session.store.selected)
-      await session.audio.audition(session.store.selected, session.track?.gain);
+      await session.audio.audition(
+        session.store.selected,
+        session.track?.gain,
+        session.track,
+        session.store.project,
+      );
   });
   input("loop").onchange = () => {
-    session.audio.loop = input("loop").checked;
-    session.clipPlayer.loop = input("loop").checked;
+    session.setLoop(input("loop").checked);
+  };
+  input("feedback-enabled").onchange = () =>
+    feedback.configure({ muted: !input("feedback-enabled").checked });
+  input("feedback-volume").oninput = () =>
+    feedback.configure({ volume: Number(input("feedback-volume").value) });
+  input("region-loop").onchange = () =>
+    session.setLoop(input("region-loop").checked);
+  input("metronome").onchange = () => {
+    session.audio.metronome = input("metronome").checked;
+    session.emit();
+  };
+  input("count-in").onchange = () => {
+    session.audio.countIn = input("count-in").checked;
+    session.emit();
+  };
+  handle("loop-view", () => session.loopView());
+  handle("set-meter", () => {
+    try {
+      session.setTimeSignature(
+        Number(input("meter-numerator").value),
+        Number(element<HTMLSelectElement>("meter-denominator").value),
+      );
+    } catch (error) {
+      sync();
+      throw error;
+    }
+  });
+  handle("loop-selection", () => session.loopSelection());
+  handle("loop-clear", () =>
+    session.store.edit((p) => {
+      delete p.loopRegion;
+    }),
+  );
+  handle("show-all-tracks", () => session.selectTrack(ALL_TRACKS));
+  handle("add-track", () => session.addTrack());
+  const setLoopBars = () => {
+    const project = session.store.project;
+    const invalid =
+      Number(input("loop-start").value) < 1 ||
+      Number(input("loop-end").value) <= Number(input("loop-start").value);
+    if (invalid) feedback.play("error");
+    else
+      session.setLoopRegion(
+        tickAtBar(project, Number(input("loop-start").value) - 1),
+        tickAtBar(project, Number(input("loop-end").value) - 1),
+      );
+    const region = session.store.project.loopRegion ?? {
+      start: 0,
+      end: projectEnd(session.store.project),
+    };
+    input("loop-start").value = String(1 + barPosition(project, region.start));
+    input("loop-end").value = String(1 + barPosition(project, region.end));
+    sync();
+  };
+  input("loop-start").onchange = setLoopBars;
+  input("loop-end").onchange = setLoopBars;
+  const ruler = element("loop-ruler");
+  let loopDrag:
+    | { pointer: number; start: number; viewStart: number; span: number }
+    | undefined;
+  const rulerTick = (event: PointerEvent) => {
+    const rect = ruler.getBoundingClientRect();
+    const start = loopDrag?.viewStart ?? session.viewStart;
+    const span = loopDrag?.span ?? session.pageSize;
+    return (
+      start +
+      Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * span
+    );
+  };
+  ruler.onpointerdown = (event) => {
+    if (event.button !== 0) return;
+    loopDrag = {
+      pointer: event.pointerId,
+      start: rulerTick(event),
+      viewStart: session.viewStart,
+      span: session.pageSize,
+    };
+    feedback.play("grab");
+    ruler.setPointerCapture(event.pointerId);
+  };
+  ruler.onpointermove = (event) => {
+    if (!loopDrag || loopDrag.pointer !== event.pointerId) return;
+    const end = rulerTick(event);
+    feedback.play("adjust", "down", (end - loopDrag.viewStart) / loopDrag.span);
+    element("loop-band").style.left =
+      `${((Math.min(loopDrag.start, end) - loopDrag.viewStart) / loopDrag.span) * 100}%`;
+    element("loop-band").style.width =
+      `${(Math.abs(end - loopDrag.start) / loopDrag.span) * 100}%`;
+  };
+  ruler.onpointerup = (event) => {
+    if (!loopDrag || loopDrag.pointer !== event.pointerId) return;
+    const project = session.store.project;
+    const end = rulerTick(event);
+    const start = beatTick(project, Math.min(loopDrag.start, end));
+    session.setLoopRegion(
+      start,
+      Math.max(
+        nextBeatTick(project, start),
+        beatTick(project, Math.max(loopDrag.start, end)),
+      ),
+    );
+    loopDrag = undefined;
+    feedback.play("drop");
+    ruler.releasePointerCapture(event.pointerId);
+  };
+  ruler.onpointercancel = () => {
+    loopDrag = undefined;
+    feedback.play("back");
+    sync();
   };
   const configureVinyl = async () => {
     const condition = element<HTMLSelectElement>("vinyl-condition")
@@ -694,6 +906,7 @@ async function start() {
     try {
       await operation;
       status("Audio ready");
+      feedback.play("success");
     } catch (error) {
       report(error);
     } finally {
@@ -709,6 +922,7 @@ async function start() {
   input("tempo").onchange = () => {
     const bpm = Number(input("tempo").value);
     if (!Number.isFinite(bpm) || bpm < 20 || bpm > 300) {
+      feedback.play("error");
       sync();
       return;
     }
@@ -798,6 +1012,7 @@ async function start() {
       importMidi(new Uint8Array(await response.arrayBuffer()), "Stories"),
     );
     status("Preset imported");
+    feedback.play("success");
   });
   let mediaRequest = 0;
   const loadMedia = async (file: File) => {
@@ -821,10 +1036,12 @@ async function start() {
           session.emit();
         }
         status("Audio ready · click to play, drag to scratch");
+        feedback.play("success");
         return;
       }
       session.load(imported.project);
       status("Project loaded");
+      feedback.play("success");
     } catch (error) {
       if (request === mediaRequest && !destroyed) report(error);
     }
@@ -839,6 +1056,7 @@ async function start() {
     if (!event.dataTransfer?.types.includes("Files")) return;
     event.preventDefault();
     dragDepth++;
+    if (dragDepth === 1) feedback.play("hover", "up");
     element("drop-target").classList.add("visible");
   };
   const dragOver = (event: DragEvent) => {
@@ -857,7 +1075,10 @@ async function start() {
     dragDepth = 0;
     element("drop-target").classList.remove("visible");
     const file = event.dataTransfer?.files[0];
-    if (file) void loadMedia(file);
+    if (file) {
+      feedback.play("open");
+      void loadMedia(file);
+    }
   };
   window.addEventListener("dragenter", dragEnter);
   window.addEventListener("dragover", dragOver);
@@ -873,11 +1094,14 @@ async function start() {
       return;
     if (event.code === "Space") {
       event.preventDefault();
+      if (event.repeat) return;
+      feedback.play(session.playing ? "pause" : "play");
       void session.togglePlay().catch(report);
     }
     if (session.view === "waveform") {
       if (event.code === "ArrowLeft" || event.code === "ArrowRight") {
         event.preventDefault();
+        feedback.play("navigate");
         void session.clipPlayer
           .play(
             session.clipPlayer.positionSeconds +
@@ -889,11 +1113,13 @@ async function start() {
     }
     if (event.code === "Delete" || event.code === "Backspace") {
       event.preventDefault();
+      if (session.store.selectedNotes.length) feedback.play("erase");
       session.deleteNote();
     }
     const command = event.ctrlKey || event.metaKey;
     if (command && event.code === "KeyZ") {
       event.preventDefault();
+      feedback.play(event.shiftKey ? "navigate" : "back");
       event.shiftKey ? session.store.redo() : session.store.undo();
     }
     const commands: Record<string, () => void> = {
@@ -917,10 +1143,27 @@ async function start() {
         : keys[event.code];
     if (shortcut) {
       event.preventDefault();
+      const cues: Record<string, FeedbackCue> = command
+        ? {
+            KeyA: "select",
+            KeyC: "select",
+            KeyX: "erase",
+            KeyV: "create",
+            KeyD: "create",
+          }
+        : {
+            KeyV: "select",
+            KeyB: "select",
+            KeyE: "select",
+            KeyQ: "adjust",
+            Escape: "back",
+          };
+      feedback.play(cues[event.code]);
       shortcut();
     }
     if (event.code.startsWith("Arrow") && session.store.selectedNotes.length) {
       event.preventDefault();
+      feedback.play("adjust");
       if (event.shiftKey && ["ArrowLeft", "ArrowRight"].includes(event.code))
         session.resize(event.code === "ArrowLeft" ? -1 : 1);
       else
@@ -947,11 +1190,13 @@ async function start() {
     }
     if (session.timeline === "scroll" && session.view !== "waveform")
       updateTimeline();
-    const beats = session.audio.positionTick / session.store.project.ppq;
+    const meter = barAt(session.store.project, session.audio.positionTick);
+    element("meter-label").textContent =
+      `${meter.numerator}/${meter.denominator}`;
     element("position").textContent =
       session.view === "waveform"
         ? `${session.clipPlayer.positionSeconds.toFixed(2)}s / ${session.clipPlayer.clip!.buffer.duration.toFixed(2)}s`
-        : `Bar ${Math.floor(beats / 4) + 1} · Beat ${((beats % 4) + 1).toFixed(1)}`;
+        : `Bar ${meter.index + 1} · Beat ${meter.beat.toFixed(1)}`;
     const playLabel = session.playing ? "Pause" : "Play";
     if (button("play").getAttribute("aria-label") !== playLabel) {
       button("play").setAttribute("aria-label", playLabel);
@@ -965,6 +1210,9 @@ async function start() {
     clearTimeout(saveTimer);
     clearInterval(interval);
     unsubscribe();
+    unsubscribeFeedback();
+    removeInteractionSounds();
+    void feedback.dispose();
     visibilityCleanup();
     navigation.dispose();
     window.removeEventListener("keydown", keyboard);

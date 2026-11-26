@@ -20,7 +20,54 @@ Start with the included song or drop a supported music file from your device. No
 - In VR, the menu's **Select**/**Draw**/**Erase** button cycles the tool and the **Grid** button cycles the snap size, next to All, Copy, Paste, Repeat and Quantize.
 - Open the project menu to save a portable project or export a stereo WAV file.
 
-Projects autosave in your browser on your device. Download a project file to keep a copy or move it to another computer. Reopening that file restores its notes, tracks, levels, and tempo map.
+Projects autosave in your browser on your device. Download a project file to keep a copy or move it to another computer. Reopening that file restores its notes, tracks, sounds, levels, tempo and time-signature maps, sustain, pitch bends and program changes.
+
+## Tracks and sounds
+
+Open **Tracks** on the left to rename parts, choose from 128 synthesized General MIDI presets, and adjust each track's level, mute and solo. Several tracks can be soloed together; mute still silences a soloed track. The coloured dot matches the track's notes in the All tracks view. Click its name to make it the active track for drawing without hiding other parts, or **Focus** to show only that part. **Show all** brings every part back, and **+ Track** creates an empty part.
+
+Enable **Drums** on a track for a synthesized percussion kit. MIDI pitches 35/36 play kick, 38–40 snare/clap, 42/44/46 hi-hats, 41/43/45/47/48/50 toms, and 49/51/52/53/55/57/59 cymbals; other pitches play short pitched percussion. The melodic preset remains selected when drum mode is turned off. These are synthesized approximations, rather than sampled General MIDI instruments.
+
+Sounds, drum mode, solo and mixer settings are included in project files and autosave. Audition uses the sound and bend at the selected note's start; playback and WAV export also respect mute, solo and levels. Choosing a preset in the track panel replaces that part's imported program-change map with your chosen sound; Undo restores it. Imported expression is summarized as program, pedal and bend event counts under each track.
+
+In VR, choose a track with **Track**, then open **Menu** for mute, solo, drum mode and level buttons. The sound button cycles through ten representative melodic presets; the desktop panel offers the complete bank.
+
+## Musical timing and expression
+
+MIDI and RIFF MIDI imports preserve changing time signatures, sustain pedal (CC64), signed pitch-wheel values and timed General MIDI program changes. Mixed-channel source tracks are split into named channel parts, including channel-10 percussion. Channel expression is retained even when a MIDI file stores it in a separate conductor track. MIDI and RIFF MIDI export write these maps back out alongside the original key-down durations and tempo map. Project files preserve the same information without MIDI's channel limits. Older project files default to 4/4 with no expression automation.
+
+Bar labels, pages, loop positions and the metronome follow the time-signature map. BPM continues to mean quarter notes per minute; in 6/8, for example, the displayed beats and metronome clicks are eighth notes. The first beat of each bar is accented. MIDI metronome and thirty-second-note metadata are retained on export; monitoring clicks use the signature's denominator. A meter change starts a new bar, shortening an incomplete preceding bar when necessary.
+
+Open **Editing options**, enter a numerator and beat unit, and choose **Set meter at current bar** to change the bar containing the playhead. Later imported changes stay at their original tick positions. In VR, **Meter** cycles through 4/4, 3/4, 6/8, 5/4 and 7/8 at that bar. Both controls support Undo; other imported meters also display and play normally.
+
+Pedal values of 64 or more sustain released melodic notes until the next pedal-up event, or the project end if the pedal is never released. The drawn notes retain their key-down lengths. Bends affect sounding melodic notes with the standard ±2-semitone range, including when seeking into a held note or restarting a loop. Program changes select the sound of new notes; already-held voices retain their original patch. Playback and WAV export share these rules. Percussion uses the synthesized kit's natural decays.
+
+MIDI export supports 15 independent melodic channels, with extra channels needed for simultaneous unisons; it reserves channel 10 for percussion. If an arrangement exceeds this limit, contains overlapping percussion unisons, or has conflicting expression maps on percussion parts sharing channel 10, export explains the restriction instead of merging channels. Save a project to retain the complete arrangement. Bank selection, custom pitch-bend ranges and other MIDI controllers are not interpreted; other note export formats retain their documented timing and expression limitations.
+
+## Repeating a phrase
+
+Open **Loop** beside the timeline. Drag in either direction across its ruler to select a region within the current view, snapped to the current meter's beats. Alternatively, enter start and end bars, choose **Loop view**, or select notes and choose **Loop selection**. End bars are exclusive: bars 2–4 repeat bars 2 and 3. Fractional bar values select part of a bar, even across meter changes. **Use whole song** removes the region, and **Enable loop** switches repetition on or off. Loop boundaries are saved with the project; loop enablement is a transport setting.
+
+Notes crossing a loop edge are clipped to the region and retriggered on each pass. The audio clock preserves tempo changes inside the region. Empty regions can also loop for practice. Turn on **Metronome** for accented clicks and **One-bar count-in** for a lead-in matching the meter where playback begins. Pausing or stopping cancels pending clicks. Clicks and count-in are monitoring aids and are excluded from exported WAVs. Audio-file playback retains its whole-file loop controls.
+
+The VR menu provides **Loop**, **Loop view**, **Loop selection**, **Click** and **Count-in** controls for MIDI editing.
+
+## Interaction sounds
+
+Desktop, touch, keyboard and XR controls use [Button Synth](https://github.com/designerzen/button-synth) for immediate procedural audio feedback. Buttons have separate press and release sounds; hover and keyboard focus use a quieter cue after the first engagement. Note edits, dragging, scratching, camera gestures, sliders, menus and file operations also provide feedback. Continuous motion produces rate-limited detents instead of a sound on every frame.
+
+| Interaction | Sound choice |
+| --- | --- |
+| Selection and note editing | Dry mouse and keyboard clicks |
+| Values, zoom, dragging and scratching | Short knob detents, pitched with slider position |
+| Toggle on / off | Distinct guitar-switch latches |
+| Grab / release | Unlock and camera-latch impacts |
+| Create / erase | Pop and low switch impacts |
+| Views, tracks and tools | Short selection blips |
+| Play / pause / stop | Rising start, descending pause and back cues |
+| Successful import or export / error | Confirmation chord / low error buzz |
+
+Open **Editing options** for **Interaction sounds** and **Feedback level**. The XR menu has **UI sounds**, **UI quieter** and **UI louder**. Preferences are remembered on this device. Feedback has its own audio output, so it stays out of visualiser measurements and exported music; track mute and solo affect music independently. Autosave and other background updates are silent. Audio starts from user engagement, and unavailable audio never blocks editing. The pinned engine and its attribution are included with the app.
 
 ## Music files
 
@@ -41,7 +88,7 @@ Drop a file anywhere on the app, or choose **Open media or project** in the proj
 
 Choose a format under **Export notes** in the project menu and press **Export notes** to download it. **Save project** preserves the complete XR DAW session; **Export WAV** renders its sound.
 
-MIDI and XR DAW projects preserve the tempo map. Other note imports retain performed timing on a 120 BPM grid. Other note exports use the first project tempo and begin at the first note; score formats may quantize rhythms. These exports support up to 15 melodic tracks. RTTTL requires a single melody. Tracker samples and effects, lyrics, plugin settings and score engraving do not become part of the XR DAW project. Musical containers are limited to 64 MB; MIDI files to 10 MB. Unsupported or invalid files leave the current project intact.
+MIDI, RIFF MIDI and XR DAW projects preserve tempo, time signatures, sustain, pitch bend and instrument programs. Other note imports retain performed timing on a 120 BPM, 4/4 grid. Other note exports use the first project tempo and begin at the first note; score formats may quantize rhythms. These exports support up to 15 melodic tracks. RTTTL requires a single melody. Tracker samples and effects, lyrics, plugin settings and score engraving do not become part of the XR DAW project. Musical containers are limited to 64 MB; MIDI files to 10 MB. Unsupported or invalid files leave the current project intact.
 
 ## Audio waveforms
 
@@ -57,7 +104,7 @@ Enable **Vinyl** in the transport to hear the audio through [rauchg/vinyl](https
 
 With Vinyl enabled, **Export WAV** renders the selected vinyl condition; **Download audio** always keeps the original file. Multichannel audio is folded into a stereo groove for Vinyl playback. The engine source and MIT license are included under `apps/web/public/vendor/vinyl`.
 
-MIDI playback and WAV export use audiobus's polyphonic FM synthesizer. MIDI formats 0 and 1 are supported, including multiple tracks and tempo changes. Bar labels use 4/4 time. WAV export supports projects up to ten minutes long.
+MIDI playback and WAV export use audiobus's polyphonic FM synthesizer and the synthesized drum kit. MIDI formats 0 and 1 are supported, including multiple tracks and tempo changes. Bar labels follow the time-signature map. WAV export supports projects up to ten minutes long.
 
 ## Live output in 3D
 

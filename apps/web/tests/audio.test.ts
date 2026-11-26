@@ -40,6 +40,8 @@ class AudioWorkletNode extends Node {
     note?: number;
     part?: number;
     velocity?: number;
+    value?: number;
+    patch?: { program: number };
   }[] = [];
   port = {
     postMessage: (message: AudioWorkletNode["messages"][number]) =>
@@ -78,6 +80,7 @@ test.afterEach(() => {
 class Context {
   static instance: Context;
   currentTime = 0;
+  sampleRate = 44100;
   state = "running";
   destination = new Node();
   nodes: Node[] = [];
@@ -101,6 +104,16 @@ class Context {
     const node = new Node();
     this.nodes.push(node);
     return node;
+  }
+  createBuffer(_channels: number, length: number) {
+    const data = new Float32Array(length);
+    return { getChannelData: () => data };
+  }
+  createBufferSource() {
+    return this.createOscillator();
+  }
+  createBiquadFilter() {
+    return new Node();
   }
 }
 class Worker {
@@ -164,6 +177,337 @@ test("lookahead schedules simultaneous voices in audio seconds, then pauses and 
     engine.dispose();
     globalThis.AudioContext = previousContext;
     globalThis.Worker = previousWorker;
+  }
+});
+
+test("loop regions clip crossing notes, exclude outside notes and repeat across tempo changes", async () => {
+  const previousContext = globalThis.AudioContext;
+  const previousWorker = globalThis.Worker;
+  globalThis.AudioContext = Context as unknown as typeof AudioContext;
+  globalThis.Worker = Worker as unknown as typeof globalThis.Worker;
+  const engine = new AudioEngine();
+  try {
+    const project = demoProject();
+    project.tempos = [
+      { tick: 0, bpm: 120 },
+      { tick: 960, bpm: 60 },
+    ];
+    project.loopRegion = { start: 480, end: 1440 };
+    project.notes = [
+      { ...project.notes[0], start: 0, duration: 960 },
+      { ...project.notes[1], start: 960, duration: 960 },
+      { ...project.notes[2], start: 1440, duration: 240 },
+    ];
+    engine.loop = true;
+    await engine.play(project);
+    assert.equal(engine.positionTick, 480);
+    assert.equal(notes().length, 1);
+    assert.ok(Math.abs(notes()[0].time! - 0.04) < 1e-8);
+    Context.instance.currentTime = 0.45;
+    Worker.instance.onmessage?.();
+    assert.equal(notes().length, 2);
+    const offs = AudioWorkletNode.instances.flatMap((n) =>
+      n.messages.filter((m) => m.type === "off"),
+    );
+    assert.ok(
+      Math.abs(offs[1].time! - 1.54) < 1e-8,
+      "crossing note ends at the region boundary",
+    );
+    Context.instance.currentTime = 1.45;
+    Worker.instance.onmessage?.();
+    assert.equal(notes().length, 3);
+    assert.ok(Math.abs(notes()[2].time! - 1.54) < 1e-8);
+    Context.instance.currentTime = 1.79;
+    assert.ok(Math.abs(engine.positionTick - 720) < 1e-8);
+    assert.ok(notes().every((n) => n.note !== project.notes[2].pitch));
+  } finally {
+    engine.dispose();
+    globalThis.AudioContext = previousContext;
+    globalThis.Worker = previousWorker;
+  }
+});
+
+test("metronome follows tempo changes, count-in delays notes, and pause cancels clicks", async () => {
+  const previousContext = globalThis.AudioContext;
+  const previousWorker = globalThis.Worker;
+  globalThis.AudioContext = Context as unknown as typeof AudioContext;
+  globalThis.Worker = Worker as unknown as typeof globalThis.Worker;
+  const engine = new AudioEngine();
+  try {
+    const project = demoProject();
+    project.tempos = [
+      { tick: 0, bpm: 120 },
+      { tick: 480, bpm: 60 },
+    ];
+    engine.metronome = true;
+    engine.countIn = true;
+    await engine.play(project, 0, true);
+    const context = Context.instance;
+    assert.deepEqual(
+      context.nodes.map((n) => n.started),
+      [0.04, 0.54, 1.04, 1.54],
+    );
+    assert.equal(notes().length, 0);
+    context.currentTime = 1;
+    assert.equal(engine.positionTick, 0, "playhead waits through count-in");
+    context.currentTime = 1.95;
+    Worker.instance.onmessage?.();
+    assert.equal(context.nodes[4].started, 2.04);
+    assert.equal(notes()[0].time, 2.04);
+    context.currentTime = 2.45;
+    Worker.instance.onmessage?.();
+    assert.equal(context.nodes[5].started, 2.54);
+    context.currentTime = 3.45;
+    Worker.instance.onmessage?.();
+    assert.equal(
+      context.nodes[6].started,
+      3.54,
+      "second beat interval reflects new tempo",
+    );
+    engine.pause();
+    assert.ok(context.nodes.every((n) => n.stopped === 0));
+  } finally {
+    engine.dispose();
+    globalThis.AudioContext = previousContext;
+    globalThis.Worker = previousWorker;
+  }
+});
+
+test("sustain, bend automation and timed programs agree in live and offline synthesis", async () => {
+  class OfflineContext extends Context {
+    async startRendering() {}
+  }
+  for (const context of [new Context(), new OfflineContext()]) {
+    AudioWorkletNode.instances = [];
+    const instrument = new ProjectInstrument(
+      context as unknown as BaseAudioContext,
+      context.destination as unknown as AudioNode,
+    );
+    const project = demoProject();
+    project.tempos = [{ tick: 0, bpm: 120 }];
+    project.tracks[0].program = 4;
+    project.notes = [
+      { ...project.notes[0], start: 0, duration: 240 },
+      { ...project.notes[1], pitch: 60, start: 480, duration: 120 },
+    ];
+    project.sustain = [
+      { trackId: "track-1", tick: 0, value: 127 },
+      { trackId: "track-1", tick: 960, value: 0 },
+    ];
+    project.pitchBends = [
+      { trackId: "track-1", tick: 0, value: 4096 },
+      { trackId: "track-1", tick: 720, value: -8192 },
+    ];
+    project.programChanges = [{ trackId: "track-1", tick: 480, program: 32 }];
+    try {
+      await instrument.prepare(project);
+      instrument.scheduleProject(project);
+      const messages = AudioWorkletNode.instances.flatMap(
+        (node) => node.messages,
+      );
+      const patches = new Map<number, number>();
+      const programs: number[] = [];
+      for (const message of messages) {
+        if (message.type === "patch")
+          patches.set(message.part!, message.patch!.program);
+        if (message.type === "on")
+          programs.push(message.patch?.program ?? patches.get(message.part!)!);
+      }
+      assert.deepEqual(
+        programs,
+        [4, 32],
+        "program changes affect new notes, preserving the held voice's patch",
+      );
+      assert.deepEqual(
+        messages.filter((m) => m.type === "off").map((m) => m.time),
+        [1, 1],
+        "pedal release controls sounding duration",
+      );
+      assert.deepEqual(
+        messages.filter((m) => m.type === "on").map((m) => m.part),
+        [0, 1],
+        "pedal-held unisons retain independent note-offs",
+      );
+      assert.ok(
+        messages.some(
+          (m) => m.type === "bend" && m.time === 0.75 && m.value === -2,
+        ),
+      );
+      assert.ok(
+        messages.some(
+          (m) => m.type === "bend" && m.time === 0.5 && m.value === 1,
+        ),
+      );
+    } finally {
+      instrument.dispose();
+    }
+  }
+});
+
+test("seek resumes pedal-held notes and loop boundaries restore their source pitch state", async () => {
+  const previousContext = globalThis.AudioContext;
+  const previousWorker = globalThis.Worker;
+  globalThis.AudioContext = Context as unknown as typeof AudioContext;
+  globalThis.Worker = Worker as unknown as typeof globalThis.Worker;
+  const engine = new AudioEngine();
+  try {
+    const project = demoProject();
+    project.tempos = [{ tick: 0, bpm: 120 }];
+    project.notes = [{ ...project.notes[0], start: 0, duration: 120 }];
+    project.sustain = [
+      { trackId: "track-1", tick: 0, value: 127 },
+      { trackId: "track-1", tick: 960, value: 0 },
+    ];
+    project.pitchBends = [
+      { trackId: "track-1", tick: 0, value: 4096 },
+      { trackId: "track-1", tick: 720, value: -8192 },
+    ];
+    await engine.play(project, 720);
+    assert.equal(
+      notes().length,
+      1,
+      "a key released earlier is still sounding under the pedal",
+    );
+    let bends = AudioWorkletNode.instances
+      .flatMap((n) => n.messages)
+      .filter((m) => m.type === "bend");
+    assert.ok(
+      bends.some((m) => Math.abs(m.time! - 0.04) < 1e-8 && m.value === -2),
+    );
+    engine.stop();
+    project.loopRegion = { start: 480, end: 960 };
+    engine.loop = true;
+    await engine.play(project, 480);
+    Context.instance.currentTime = 0.45;
+    Worker.instance.onmessage?.();
+    bends = AudioWorkletNode.instances
+      .flatMap((n) => n.messages)
+      .filter((m) => m.type === "bend");
+    assert.ok(
+      bends.some((m) => Math.abs(m.time! - 0.54) < 1e-8 && m.value === 1),
+      "each loop restores the bend at the region's start",
+    );
+  } finally {
+    engine.dispose();
+    globalThis.AudioContext = previousContext;
+    globalThis.Worker = previousWorker;
+  }
+});
+
+test("count-in and metronome follow numerator and denominator instead of fixed four-beat bars", async () => {
+  const previousContext = globalThis.AudioContext;
+  const previousWorker = globalThis.Worker;
+  globalThis.AudioContext = Context as unknown as typeof AudioContext;
+  globalThis.Worker = Worker as unknown as typeof globalThis.Worker;
+  try {
+    for (const [numerator, denominator] of [
+      [3, 4],
+      [6, 8],
+    ]) {
+      AudioWorkletNode.instances = [];
+      const engine = new AudioEngine();
+      try {
+        const project = demoProject();
+        project.tempos = [{ tick: 0, bpm: 120 }];
+        project.timeSignatures = [{ tick: 0, numerator, denominator }];
+        engine.metronome = engine.countIn = true;
+        await engine.play(project, 0, true);
+        const beatSeconds = (0.5 * 4) / denominator;
+        const context = Context.instance;
+        assert.equal(context.nodes.length, numerator);
+        assert.ok(
+          Math.abs(context.nodes[1].started - (0.04 + beatSeconds)) < 1e-8,
+        );
+        assert.equal(
+          notes().length,
+          0,
+          "music waits for the meter-sized count-in",
+        );
+        context.currentTime = numerator * beatSeconds - 0.05;
+        Worker.instance.onmessage?.();
+        assert.ok(
+          Math.abs(
+            context.nodes.at(-1)!.started - (0.04 + numerator * beatSeconds),
+          ) < 1e-8,
+        );
+        assert.equal(context.nodes.at(-1)!.frequency.value, 1500);
+      } finally {
+        engine.dispose();
+      }
+    }
+  } finally {
+    globalThis.AudioContext = previousContext;
+    globalThis.Worker = previousWorker;
+  }
+});
+
+test("saved presets and solo are applied in both live and offline instruments", async () => {
+  class OfflineContext extends Context {
+    async startRendering() {}
+  }
+  for (const context of [new Context(), new OfflineContext()]) {
+    AudioWorkletNode.instances = [];
+    const instrument = new ProjectInstrument(
+      context as unknown as BaseAudioContext,
+      context.destination as unknown as AudioNode,
+    );
+    try {
+      const project = demoProject();
+      project.tracks[0].program = 32;
+      project.tracks[0].solo = true;
+      project.tracks.push({
+        id: "other",
+        name: "Other",
+        gain: 1,
+        muted: false,
+      });
+      project.notes = [
+        project.notes[0],
+        { ...project.notes[1], trackId: "other" },
+      ];
+      await instrument.prepare(project);
+      instrument.scheduleProject(project);
+      assert.equal(notes().length, 1);
+      const patch = AudioWorkletNode.instances
+        .flatMap((node) => node.messages)
+        .find((m) => (m as any).patch) as any;
+      assert.equal(patch.patch.program, 32);
+    } finally {
+      instrument.dispose();
+    }
+  }
+});
+
+test("drum tracks synthesize a kit for playback and export, and release scheduled sources", async () => {
+  class OfflineContext extends Context {
+    async startRendering() {}
+  }
+  for (const context of [new Context(), new OfflineContext()]) {
+    AudioWorkletNode.instances = [];
+    const instrument = new ProjectInstrument(
+      context as unknown as BaseAudioContext,
+      context.destination as unknown as AudioNode,
+    );
+    try {
+      const project = demoProject();
+      project.tracks[0].drums = true;
+      project.notes = [36, 38, 42, 46, 49, 45].map((pitch, i) => ({
+        ...project.notes[i],
+        pitch,
+      }));
+      await instrument.prepare(project);
+      instrument.scheduleProject(project);
+      assert.equal(AudioWorkletNode.instances.length, 0);
+      assert.equal(context.nodes.length, 6);
+      assert.ok(
+        context.nodes.every((n) => n.started >= 0 && n.stopped > n.started),
+      );
+      assert.equal(context.nodes[0].type, "sine");
+      instrument.silence();
+      assert.ok(context.nodes.every((n) => n.stopped === 0));
+    } finally {
+      instrument.dispose();
+    }
   }
 });
 

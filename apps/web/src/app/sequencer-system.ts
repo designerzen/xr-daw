@@ -25,10 +25,17 @@ import {
   Vector3,
 } from "@iwsdk/core";
 import { NoteView } from "./components";
-import { projectEnd, snapTick, type Note } from "./project";
+import { projectEnd, snapTick, trackHue, type Note } from "./project";
+import { GENERAL_MIDI_INSTRUMENT_NAMES as INSTRUMENT_NAMES } from "audiobus/midi/general-midi-instrument-constants.ts";
 import { ALL_TRACKS, GRID_DIVISIONS, Session } from "./session";
 import { MAX_NOTE_DEPTH, noteDepth } from "./note-depth";
 import { OUTPUT_MODES } from "./output-history";
+import { barAt, tickAtBar } from "./meter";
+import {
+  actionCue,
+  interactionFeedback as feedback,
+  type FeedbackCue,
+} from "./interaction-feedback";
 
 const LEFT = -1.6;
 const WIDTH = 3.2;
@@ -72,7 +79,10 @@ export function sequencerSystem(session: Session) {
   }) {
     private noteEntities: Entity[] = [];
     private decorations: Entity[] = [];
-    private dragging = new Map<Entity, { note: Note; x: number; y: number }>();
+    private dragging = new Map<
+      Entity,
+      { note: Note; x: number; y: number; cell?: string }
+    >();
     // The board under the notes takes Draw and Erase strokes.
     private board?: Mesh;
     private hover: { tick: number; pitch: number } | null = null;
@@ -175,15 +185,70 @@ export function sequencerSystem(session: Session) {
       const panel = this.world.requireSceneObject<UIKitMLAsset>("transport");
       panel.document.setTargetDimensions(1.15, 0.6);
       const advanced = panel.requireElementById("advanced");
-      const more = panel.requireElementById("more");
       let expanded = false;
       const toggleOptions = () => {
         expanded = !expanded;
         advanced.setProperties({ display: expanded ? "flex" : "none" });
       };
-      more.addEventListener("click", toggleOptions);
-      this.cleanupFuncs.push(() =>
-        more.removeEventListener("click", toggleOptions),
+      const bindButton = (id: string, action: () => void) => {
+        const button = panel.requireElementById(id);
+        let pointerActivation = false;
+        let held = false;
+        let cue: FeedbackCue = "press";
+        const chooseCue = () => {
+          if (id === "more") return expanded ? "close" : "open";
+          const active: Record<string, boolean | undefined> = {
+            play: session.playing,
+            loop: session.audio.loop,
+            follow: session.followPlayback,
+            scroll: session.timeline === "scroll",
+            "track-mute": session.track?.muted,
+            "track-solo": session.track?.solo,
+            "track-drums": session.track?.drums,
+            metronome: session.audio.metronome,
+            "count-in": session.audio.countIn,
+            vinyl: session.clipPlayer.vinylEnabled,
+            "feedback-enabled": !feedback.muted,
+          };
+          return actionCue(id, active[id]);
+        };
+        const down = () => {
+          pointerActivation = held = true;
+          cue = chooseCue();
+          feedback.play(cue);
+        };
+        const up = () => {
+          if (held) feedback.play(cue, "up");
+          held = false;
+        };
+        const cancel = () => {
+          if (held) feedback.play("back");
+          pointerActivation = held = false;
+        };
+        const enter = () => feedback.play("hover", "up");
+        const click = () => {
+          if (!pointerActivation) feedback.play(chooseCue());
+          pointerActivation = false;
+          action();
+        };
+        for (const [type, listener] of [
+          ["pointerdown", down],
+          ["pointerup", up],
+          ["pointercancel", cancel],
+          ["pointerenter", enter],
+          ["click", click],
+        ] as const) {
+          button.addEventListener(type, listener);
+          this.cleanupFuncs.push(() =>
+            button.removeEventListener(type, listener),
+          );
+        }
+      };
+      bindButton("more", toggleOptions);
+      this.cleanupFuncs.push(
+        feedback.subscribe(() => {
+          this.dirty = true;
+        }),
       );
       this.cleanupFuncs.push(
         this.world.visibilityState.subscribe((value) => {
@@ -191,6 +256,34 @@ export function sequencerSystem(session: Session) {
         }),
       );
       const actions: Record<string, () => void> = {
+        meter: () => {
+          const meter = barAt(
+            session.store.project,
+            session.audio.positionTick,
+          );
+          const choices = [
+            [4, 4],
+            [3, 4],
+            [6, 8],
+            [5, 4],
+            [7, 8],
+          ];
+          const index = choices.findIndex(
+            ([n, d]) => n === meter.numerator && d === meter.denominator,
+          );
+          const [n, d] = choices[(index + 1) % choices.length];
+          session.setTimeSignature(n, d);
+        },
+        "feedback-enabled": () => {
+          feedback.configure({ muted: !feedback.muted });
+          if (!feedback.muted) feedback.play("on");
+        },
+        "feedback-quieter": () =>
+          feedback.configure({ volume: feedback.volume - 0.1 }),
+        "feedback-louder": () => {
+          feedback.configure({ volume: feedback.volume + 0.1 });
+          feedback.play("adjust");
+        },
         play: () => {
           void session.togglePlay().catch(session.onError);
         },
@@ -273,13 +366,49 @@ export function sequencerSystem(session: Session) {
           const current = session.allTracks ? ALL_TRACKS : session.trackId;
           session.selectTrack(ids[(ids.indexOf(current) + 1) % ids.length]);
         },
+        loop: () => session.setLoop(!session.audio.loop),
+        "loop-view": () => {
+          if (session.view !== "waveform") session.loopView();
+        },
+        "loop-selection": () => {
+          if (session.view !== "waveform") session.loopSelection();
+        },
+        metronome: () => {
+          session.audio.metronome = !session.audio.metronome;
+          session.emit();
+        },
+        "count-in": () => {
+          session.audio.countIn = !session.audio.countIn;
+          session.emit();
+        },
+        "track-mute": () =>
+          session.updateTrack(session.trackId, {
+            muted: !session.track?.muted,
+          }),
+        "track-solo": () =>
+          session.updateTrack(session.trackId, { solo: !session.track?.solo }),
+        "track-drums": () =>
+          session.updateTrack(session.trackId, {
+            drums: !session.track?.drums,
+          }),
+        "track-sound": () => {
+          const programs = [0, 4, 16, 24, 32, 48, 56, 73, 80, 88];
+          const current = programs.indexOf(session.track?.program ?? 0);
+          session.updateTrack(session.trackId, {
+            program: programs[(current + 1) % programs.length],
+          });
+        },
+        "track-quieter": () =>
+          session.updateTrack(session.trackId, {
+            gain: Math.max(0, (session.track?.gain ?? 0.7) - 0.1),
+          }),
+        "track-louder": () =>
+          session.updateTrack(session.trackId, {
+            gain: Math.min(1, (session.track?.gain ?? 0.7) + 0.1),
+          }),
       };
       for (const [id, action] of Object.entries(actions)) {
-        const button = panel.requireElementById(id);
-        button.addEventListener("click", action);
-        this.cleanupFuncs.push(() =>
-          button.removeEventListener("click", action),
-        );
+        bindButton(id, action);
       }
       this.cleanupFuncs.push(() => {
         this.scene.remove(ambient, light);
@@ -316,6 +445,7 @@ export function sequencerSystem(session: Session) {
         const cell = this.cellAt(event.point);
         if (!cell) return;
         event.stopPropagation();
+        feedback.play("create");
         session.drawNote(cell.tick, cell.pitch);
         this.audition();
       });
@@ -351,35 +481,43 @@ export function sequencerSystem(session: Session) {
       velocityLabel.position.z = Z + MAX_NOTE_DEPTH / 2;
       add(velocityLabel);
       // Grid density follows the visible span; the strip may hold several spans.
-      const beat = session.store.project.ppq;
-      const bars = session.pageSize / beat / 4;
-      const minorStep = Math.max(1, Math.ceil(bars / 16));
-      const majorStep = Math.max(4, Math.ceil(bars / 4) * 4);
-      const firstBeat = this.stripStart / beat;
-      for (
-        let index = firstBeat;
-        index <= firstBeat + this.stripLength / beat;
-        index += minorStep
-      ) {
+      const project = session.store.project;
+      const firstBar = barAt(project, this.stripStart).index;
+      const lastBar = barAt(project, this.stripStart + this.stripLength).index;
+      const majorStep = Math.max(1, Math.ceil((lastBar - firstBar) / 16));
+      const gridLine = (tick: number, major: boolean) => {
         const line = new Mesh(
           new BoxGeometry(0.002, HEIGHT, 0.002),
           new MeshBasicMaterial({
-            color: index % majorStep ? 0x28364b : 0x546581,
+            color: major ? 0x546581 : 0x28364b,
             clippingPlanes: this.clip,
           }),
         );
-        line.position.set(
-          this.stripX(index * beat),
-          BOTTOM + HEIGHT / 2,
-          Z - 0.015,
-        );
-        line.userData.tick = index * beat;
+        line.position.set(this.stripX(tick), BOTTOM + HEIGHT / 2, Z - 0.015);
+        line.userData.tick = tick;
         add(line, this.stripEntity);
-        if (index % majorStep === 0) {
-          const bar = label(`Bar ${index / 4 + 1}`, line.position.x, 2.29);
-          bar.material.clippingPlanes = this.labelClip;
-          bar.userData.tick = index * beat;
-          add(bar, this.stripEntity);
+        return line;
+      };
+      for (let index = firstBar; index <= lastBar; index += majorStep) {
+        const tick = tickAtBar(project, index);
+        const meter = barAt(project, tick);
+        const line = gridLine(tick, true);
+        const bar = label(
+          `Bar ${index + 1}${meter.tick === tick ? ` · ${meter.numerator}/${meter.denominator}` : ""}`,
+          line.position.x,
+          2.29,
+        );
+        bar.material.clippingPlanes = this.labelClip;
+        bar.userData.tick = tick;
+        add(bar, this.stripEntity);
+        if (majorStep === 1 && lastBar - firstBar <= 16) {
+          const step = Math.max(1, Math.ceil(meter.numerator / 16));
+          for (
+            let beat = step;
+            beat < meter.numerator && tick + beat * meter.beatTicks < meter.end;
+            beat += step
+          )
+            gridLine(tick + beat * meter.beatTicks, false);
         }
       }
       const row = HEIGHT / session.pitchRows;
@@ -437,6 +575,8 @@ export function sequencerSystem(session: Session) {
             note,
             session.store.project.tracks.find((t) => t.id === note.trackId)
               ?.gain,
+            session.store.project.tracks.find((t) => t.id === note.trackId),
+            session.store.project,
           )
           .catch(session.onError);
     }
@@ -450,8 +590,7 @@ export function sequencerSystem(session: Session) {
     private stripRange() {
       if (session.timeline === "pages")
         return { start: session.pageTick, length: session.pageSize };
-      const bar = session.store.project.ppq * 4;
-      const songEnd = Math.ceil(projectEnd(session.store.project) / bar) * bar;
+      const songEnd = projectEnd(session.store.project);
       const start = Math.max(
         0,
         Math.floor(session.viewStart / session.pageSize - 1) * session.pageSize,
@@ -485,8 +624,8 @@ export function sequencerSystem(session: Session) {
         const material = new MeshStandardMaterial({
           // One hue per part when every track is shown, otherwise one per pitch.
           color: new Color().setHSL(
-            session.allTracks && tracks.size > 1
-              ? ((tracks.get(note.trackId) ?? 0) * 0.618 + 0.55) % 1
+            session.allTracks
+              ? trackHue(tracks.get(note.trackId) ?? 0)
               : (note.pitch / 24) % 1,
             0.65,
             0.58,
@@ -542,10 +681,12 @@ export function sequencerSystem(session: Session) {
           });
         const select = (event: Modifiers) => {
           if (session.tool === "erase") {
+            feedback.play("erase");
             // Defer, so the entity is not rebuilt away while its event is still dispatching.
             queueMicrotask(() => session.erase(note.id));
             return;
           }
+          feedback.play("select");
           session.pick(note.id, !!(event.ctrlKey || event.metaKey));
           if (session.store.isSelected(note.id)) this.audition();
         };
@@ -554,8 +695,10 @@ export function sequencerSystem(session: Session) {
         entity.object3D!.addEventListener(
           "pointerenter",
           (event: Modifiers) => {
-            if (session.tool === "erase" && (event.buttons ?? 0) & 1)
+            if (session.tool === "erase" && (event.buttons ?? 0) & 1) {
+              feedback.play("erase");
               queueMicrotask(() => session.erase(note.id));
+            } else feedback.play("hover", "up");
           },
         );
         this.noteEntities.push(entity);
@@ -570,14 +713,21 @@ export function sequencerSystem(session: Session) {
     }
 
     private updateTimelineLabel(viewStart: number, viewEnd: number) {
-      const bar = session.store.project.ppq * 4;
-      const total = Math.ceil(projectEnd(session.store.project) / bar);
+      const project = session.store.project;
+      const total = session.totalBars;
+      const meter = barAt(project, session.audio.positionTick);
       const text =
         session.timeline === "scroll"
-          ? `Bar ${Math.floor(session.audio.positionTick / bar) + 1} / ${total}`
-          : `Bars ${Math.floor(viewStart / bar) + 1}-${Math.min(Math.ceil(viewEnd / bar), total)} / ${total}`;
+          ? `Bar ${meter.index + 1} / ${total} ${meter.numerator}/${meter.denominator}`
+          : `Bars ${barAt(project, viewStart).index + 1}-${Math.min(barAt(project, viewEnd - 1e-6).index + 1, total)} / ${total} ${meter.numerator}/${meter.denominator}`;
       if (text === this.timelineLabel) return;
       this.timelineLabel = text;
+      this.world
+        .requireSceneObject<UIKitMLAsset>("transport")
+        .requireElementById("meter-label")
+        .setProperties({
+          text: `Meter ${meter.numerator}/${meter.denominator}`,
+        });
       this.world
         .requireSceneObject<UIKitMLAsset>("transport")
         .requireElementById("timeline-label")
@@ -603,14 +753,24 @@ export function sequencerSystem(session: Session) {
             const note = session.store.project.notes.find(
               (n) => n.id === object.userData.noteId,
             );
-            if (note)
+            if (note) {
+              feedback.play("grab");
               this.dragging.set(entity, {
                 note: { ...note },
                 x: object.userData.anchorX,
                 y: object.userData.anchorY,
               });
+            }
+          }
+          const drag = this.dragging.get(entity);
+          if (drag) {
+            const cell = `${Math.round((((object.position.x - drag.x) / WIDTH) * session.pageSize) / session.gridStep)}:${Math.round(((object.position.y - drag.y) * session.pitchRows) / HEIGHT)}`;
+            if (drag.cell !== undefined && cell !== drag.cell)
+              feedback.play("adjust");
+            drag.cell = cell;
           }
         } else if (previous) {
+          feedback.play("drop");
           this.dragging.delete(entity);
           const start = snapTick(
             previous.note.start +
@@ -689,16 +849,41 @@ export function sequencerSystem(session: Session) {
         outputPanel
           .requireElementById("output-choice-label")
           .setProperties({ text: OUTPUT_MODES[session.outputChoice].label });
-        outputPanel
-          .requireElementById("output-toggle-label")
-          .setProperties({
-            text: session.outputModes.includes(session.outputChoice)
-              ? "Remove"
-              : "Add",
-          });
+        outputPanel.requireElementById("output-toggle-label").setProperties({
+          text: session.outputModes.includes(session.outputChoice)
+            ? "Remove"
+            : "Add",
+        });
         this.viewPivot.rotation.x =
           session.view === "velocity" ? -Math.PI / 2 : 0;
         const panel = this.world.requireSceneObject<UIKitMLAsset>("transport");
+        panel.requireElementById("feedback-label").setProperties({
+          text: feedback.muted
+            ? "UI sounds off"
+            : `UI sounds ${Math.round(feedback.volume * 100)}%`,
+        });
+        for (const [id, enabled] of Object.entries({
+          loop: session.audio.loop,
+          metronome: session.audio.metronome,
+          "count-in": session.audio.countIn,
+          "track-mute": session.track?.muted,
+          "track-solo": session.track?.solo,
+          "track-drums": session.track?.drums,
+        }))
+          panel
+            .requireElementById(id)
+            .setProperties({ backgroundOpacity: enabled ? 0.25 : 0.04 });
+        panel.requireElementById("track-name-label").setProperties({
+          text: `${session.track?.name ?? "No track"} · ${Math.round((session.track?.gain ?? 0) * 100)}%`,
+        });
+        panel.requireElementById("track-sound-label").setProperties({
+          text: session.track?.drums
+            ? "Synthesized kit"
+            : INSTRUMENT_NAMES[session.track?.program ?? 0],
+        });
+        panel.requireElementById("composition-options").setProperties({
+          display: session.view === "waveform" ? "none" : "flex",
+        });
         const scrolling = session.timeline === "scroll";
         panel.requireElementById("follow").setProperties({
           backgroundOpacity: session.followPlayback ? 0.25 : 0.04,

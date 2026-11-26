@@ -20,6 +20,7 @@ import {
   Vector3,
 } from "@iwsdk/core";
 import type { PointerEvent as SpatialPointerEvent } from "@pmndrs/pointer-events";
+import { interactionFeedback as feedback } from "./interaction-feedback";
 import type { AudioClip } from "./clip-player";
 import { Session } from "./session";
 import { waveformTime } from "./spectrum";
@@ -198,6 +199,7 @@ export function waveformSystem(session: Session) {
         target.addEventListener("pointerdown", (event) => {
           if (this.pointer !== null) return;
           event.stopPropagation();
+          feedback.play("grab");
           this.pointer = event.pointerId;
           this.capturedTarget = target;
           dragOffset = event.point.x - rayX(event);
@@ -222,9 +224,15 @@ export function waveformSystem(session: Session) {
             clip.buffer.duration,
           );
           session.clipPlayer.scrubTo(this.latestTime);
+          feedback.play(
+            "adjust",
+            "down",
+            this.latestTime / clip.buffer.duration,
+          );
         });
         target.addEventListener("pointerup", (event) => {
           if (event.pointerId !== this.pointer) return;
+          feedback.play("drop");
           this.pointer = null;
           this.capturedTarget = undefined;
           target.releasePointerCapture(event.pointerId);
@@ -232,8 +240,12 @@ export function waveformSystem(session: Session) {
         });
         target.addEventListener("pointercancel", (event) => {
           if (event.pointerId !== this.pointer) return;
+          feedback.play("back");
           this.cancelPointer();
         });
+        target.addEventListener("pointerenter", () =>
+          feedback.play("hover", "up"),
+        );
       };
       bindTarget(plane);
       this.ringEntities.forEach((entity) =>

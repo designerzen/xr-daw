@@ -11,6 +11,7 @@ import {
   Vector3,
   type Object3D,
 } from "@iwsdk/core";
+import { interactionFeedback as feedback } from "./interaction-feedback";
 
 /**
  * Desktop camera styles. Parallel styles keep every bar and every pitch the same size on screen;
@@ -334,6 +335,7 @@ export class SceneNavigation {
         ? new Vector2(event.clientX, event.clientY)
         : null;
     if (!this.gesture) return;
+    feedback.play("grab");
     this.stop(event);
     for (const id of this.points.keys()) this.canvas.setPointerCapture(id);
   };
@@ -354,6 +356,7 @@ export class SceneNavigation {
     this.stop(event);
     const dx = this.center.x - previous.x,
       dy = this.center.y - previous.y;
+    if (Math.abs(dx) + Math.abs(dy) > 0.5) feedback.play("adjust");
     if (this.points.size > 1 || this.panGesture) this.pan(dx, dy);
     else this.orbit(dx, dy);
     if (this.distance && previousDistance)
@@ -369,6 +372,8 @@ export class SceneNavigation {
         this.canvas.releasePointerCapture(event.pointerId);
     }
     if (!this.points.size) {
+      if (this.gesture)
+        feedback.play(event.type === "pointercancel" ? "back" : "drop");
       if (this.gesture && this.tap && event.type === "pointerup")
         this.onTap?.();
       this.tap = null;
@@ -377,6 +382,7 @@ export class SceneNavigation {
   };
   private wheel = (event: WheelEvent) => {
     if (this.immersive) return;
+    feedback.play("adjust", "down", event.deltaY < 0 ? 0.7 : 0.3);
     this.stop(event);
     this.zoom(
       Math.exp(
