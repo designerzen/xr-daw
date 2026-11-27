@@ -29,26 +29,26 @@
     "test:ar": "iwsdk browser run tests/xr-ar.mjs"
   },
   "dependencies": {
-    "@iwsdk/core": "1.0.1",
+    "@iwsdk/core": "1.1.0",
     "@pmndrs/pointer-events": "6.6.32",
-    "@pmndrs/uikit": "1.0.74",
-    "@pmndrs/uikit-horizon": "1.0.74",
-    "@pmndrs/uikit-lucide": "1.0.74",
-    "three": "npm:super-three@0.181.0",
-    "midi-file": "1.2.4",
+    "@pmndrs/uikit": "1.0.78",
+    "@pmndrs/uikit-horizon": "1.0.78",
+    "@pmndrs/uikit-lucide": "1.0.78",
     "audiobus": "workspace:*",
+    "midi-file": "1.2.4",
     "netronome": "workspace:*",
-    "webmidi": "^3.1.12"
+    "three": "npm:super-three@0.185.0",
+    "webmidi": "^3.3.1"
   },
   "devDependencies": {
-    "@iwsdk/cli": "1.0.1",
-    "@iwsdk/vite-plugin-dev": "1.0.1",
-    "@types/three": "^0.181.0",
-    "@types/node": "^24.0.0",
-    "typescript": "^5.7.3",
-    "vite": "^7.1.4",
-    "vite-plugin-static-copy": "^3.1.0",
-    "tsx": "^4.20.0"
+    "@iwsdk/cli": "1.1.0",
+    "@iwsdk/vite-plugin-dev": "1.1.0",
+    "@types/node": "^26.6.11",
+    "@types/three": "~0.185.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.8",
+    "vite-plugin-static-copy": "^4.1.1"
   },
   "engines": {
     "node": ">=22.12.0"

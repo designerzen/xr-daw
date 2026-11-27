@@ -3,12 +3,12 @@ packages:
   - "packages/*"
 
 overrides:
-  three: "npm:super-three@0.181.0"
+  three: "npm:super-three@0.185.0"
 
 # Build Vite's esbuild binary and audiobus-protocol's TypeScript distribution.
 allowBuilds:
   esbuild: true
-  audiobus-protocol@https://codeload.github.com/designerzen/audiobus-protocol/tar.gz/4946ba64298404e745fcfe8b98914d51de05a09f: true
+  audiobus-protocol@https://codeload.github.com/designerzen/audiobus-protocol/tar.gz/59b008ff5930c257408af4faca15f2e3a4b7d5dc: true
   core-js: false
   leveldown: false
   onnxruntime-node: false
